@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="220" viewBox="0 0 420 220" role="img" aria-labelledby="title desc">
+  <title id="title">Technical quadcopter drone</title>
+  <desc id="desc">A clean line art quadcopter used as the moving traveler in the portfolio.</desc>
+  <defs>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#1d201c" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)" fill="none" stroke="#3d4038" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M167 95 106 59M253 95l61-36M168 123l-63 35M252 123l63 35"/>
+    <ellipse cx="210" cy="111" rx="57" ry="34" fill="#ebe1c9"/>
+    <path d="M180 111h60M210 78v66" stroke="#b85b37" stroke-width="5"/>
+    <path d="M190 141l-12 27M230 141l12 27"/>
+    <path d="M174 168h-19M246 168h19"/>
+    <circle cx="210" cy="111" r="10" fill="#b85b37" stroke="#b85b37"/>
+    <path d="M97 54c-29-14-54-9-72 7 17 18 43 23 72 7M323 54c29-14 54-9 72 7-17 18-43 23-72 7M97 163c-29 14-54 9-72-7 17-18 43-23 72-7M323 163c29 14 54 9 72-7-17-18-43-23-72-7" stroke-width="5"/>
+    <circle cx="101" cy="61" r="11" fill="#ebe1c9"/>
+    <circle cx="319" cy="61" r="11" fill="#ebe1c9"/>
+    <circle cx="101" cy="156" r="11" fill="#ebe1c9"/>
+    <circle cx="319" cy="156" r="11" fill="#ebe1c9"/>
+  </g>
+</svg>
