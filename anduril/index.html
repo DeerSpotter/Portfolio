@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <meta name="theme-color" content="#ede4d0" />
+  <title>Maxim Teleguz | Builder Mission Route</title>
+  <meta name="description" content="A scroll driven project journey prepared for Anduril Industries recruiting." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="paper-noise" aria-hidden="true"></div>
+
+  <header class="hud">
+    <div class="hud-brand">
+      <span class="hud-kicker">CANDIDATE PROJECT ROUTE</span>
+      <strong>MAXIM TELEGUZ</strong>
+    </div>
+    <div class="hud-target">
+      <span>MISSION</span>
+      <strong>PLM DEVELOPER · ANDURIL</strong>
+    </div>
+    <div class="hud-progress" aria-label="Journey progress">
+      <span id="progressLabel">00 / 06</span>
+      <div class="progress-track"><i id="progressBar"></i></div>
+    </div>
+  </header>
+
+  <div class="flight-layer" aria-hidden="true">
+    <svg class="route-map" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+      <path id="routePath" d="M150 80 C760 170 160 290 730 390 C880 460 250 530 760 640 C870 720 300 790 820 920" />
+      <path class="route-dashes" d="M150 80 C760 170 160 290 730 390 C880 460 250 530 760 640 C870 720 300 790 820 920" />
+    </svg>
+    <div id="drone" class="drone-wrap">
+      <img src="assets/drone.svg" alt="" />
+      <span class="drone-shadow"></span>
+    </div>
+  </div>
+
+  <main id="journey">
+    <section class="stop hero-stop" data-stop="0" id="start">
+      <div class="stop-grid">
+        <div class="map-copy hero-copy">
+          <p class="eyebrow">BUILDER BRIEF · ROUTE 00</p>
+          <h1>I build the hardware.<br />Then I build the systems<br />that make the hardware move.</h1>
+          <p class="lede">Mechanical design led me into PLM administration, configuration control, automation, public source engineering tools, and mission architecture software. Scroll the route to see how those pieces connect.</p>
+          <div class="hero-chips">
+            <span>Teamcenter</span><span>NX</span><span>CAD / PLM</span><span>Automation</span><span>Mission Architecture</span>
+          </div>
+        </div>
+        <aside class="field-note intro-note">
+          <span class="pin"></span>
+          <p class="note-label">DESIGN PRINCIPLE</p>
+          <blockquote>Do not just work around engineering friction. Understand it, remove it, and leave a better system behind.</blockquote>
+          <small>Candidate supplied portfolio. Not an Anduril Industries website. Not classified.</small>
+        </aside>
+      </div>
+      <div class="scroll-cue">SCROLL TO FLY THE ROUTE <span>↓</span></div>
+    </section>
+
+    <section class="stop" data-stop="1" id="physical-systems">
+      <div class="waypoint">WP · 01</div>
+      <div class="stop-grid">
+        <article class="project-card">
+          <header>
+            <p class="eyebrow">PHYSICAL SYSTEMS</p>
+            <h2>Start with the thing that has to work in the real world.</h2>
+          </header>
+          <p class="project-lede">Years of hands on mechanical design across defense shelters, radar support equipment, launcher concepts, and production hardware taught me to think about interfaces, configuration, manufacturability, and the consequences of bad data.</p>
+          <div class="proof-grid">
+            <div><span>ROLE</span><strong>Designer / Lead Designer</strong></div>
+            <div><span>PROGRAM EXPERIENCE</span><strong>TPY 4 · MTC · Launcher concepts</strong></div>
+            <div><span>TOOLS</span><strong>NX · Creo · SolidWorks · Inventor</strong></div>
+            <div><span>FOCUS</span><strong>Interfaces · detailing · tolerance · configuration</strong></div>
+          </div>
+        </article>
+        <aside class="field-note">
+          <span class="pin"></span>
+          <p class="note-label">WHAT CHANGED</p>
+          <h3>I stopped seeing CAD as the product.</h3>
+          <p>The product is the complete definition moving through people, data, approvals, revisions, manufacturing, and field use.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="stop" data-stop="2" id="plm">
+      <div class="waypoint">WP · 02</div>
+      <div class="stop-grid reverse">
+        <article class="project-card">
+          <header>
+            <p class="eyebrow">PLM OPERATIONS</p>
+            <h2>Move from consuming the system to owning how engineers experience it.</h2>
+          </header>
+          <p class="project-lede">As a Teamcenter administrator working in an NX managed environment, I supported the product backbone from both sides: as the designer depending on it and as the administrator responsible for making it reliable.</p>
+          <div class="proof-grid">
+            <div><span>PLATFORM</span><strong>Siemens Teamcenter</strong></div>
+            <div><span>CAD</span><strong>NX managed workflows</strong></div>
+            <div><span>WORK</span><strong>Data integrity · workflow · configuration</strong></div>
+            <div><span>PROGRAM</span><strong>Sentinel / GBSD support</strong></div>
+          </div>
+        </article>
+        <aside class="field-note accent-note">
+          <span class="pin"></span>
+          <p class="note-label">PLM VIEW</p>
+          <blockquote>The best PLM administrator understands why the engineer is frustrated before deciding what the system should do.</blockquote>
+        </aside>
+      </div>
+    </section>
+
+    <section class="stop" data-stop="3" id="automation">
+      <div class="waypoint">WP · 03</div>
+      <div class="stop-grid">
+        <article class="project-card">
+          <header>
+            <p class="eyebrow">ENGINEERING AUTOMATION</p>
+            <h2>Recurring friction became software.</h2>
+          </header>
+          <p class="project-lede">When configuration review, bad CAD data, history extraction, or repetitive designer tasks consumed engineering time, I built focused utilities instead of accepting the manual process.</p>
+          <div class="build-list">
+            <div><b>Configuration evidence review</b><span>Automated drawing history extraction, source grouping, review workbooks, and evidence workflows.</span></div>
+            <div><b>NX data diagnostics</b><span>Tools for locating problematic component tags and exposing hard to find CAD data failures.</span></div>
+            <div><b>Designer workflow utilities</b><span>NX, Teamcenter, Vault, Inventor, and Excel automation aimed at removing repeated clicks and manual reconciliation.</span></div>
+          </div>
+        </article>
+        <aside class="field-note">
+          <span class="pin"></span>
+          <p class="note-label">BUILDER SIGNAL</p>
+          <h3>I do not wait for a perfect platform project.</h3>
+          <p>I build the smallest useful tool, validate it against the real workflow, then keep improving it.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="stop" data-stop="4" id="sources">
+      <div class="waypoint">WP · 04</div>
+      <div class="stop-grid reverse">
+        <article class="project-card">
+          <header>
+            <p class="eyebrow">PUBLIC SOURCE TOOLING</p>
+            <h2>Turn scattered government data into usable engineering context.</h2>
+          </header>
+          <p class="project-lede">I built search and source management workflows around public federal documents so architecture work could retain provenance, verify endpoints, organize source buckets, and stop repeatedly rediscovering the same evidence.</p>
+          <div class="project-links">
+            <a href="https://github.com/DeerSpotter/IMLIVE_SEARCH" target="_blank" rel="noreferrer">IMLIVE SEARCH <span>↗</span></a>
+          </div>
+          <div class="proof-grid compact">
+            <div><span>INPUTS</span><strong>SAM.gov · public S3 sources</strong></div>
+            <div><span>CAPABILITIES</span><strong>Endpoint verification · tags · bucket management</strong></div>
+          </div>
+        </article>
+        <aside class="field-note">
+          <span class="pin"></span>
+          <p class="note-label">WHY IT MATTERS</p>
+          <blockquote>Architecture is stronger when every claim can travel back to the source that justified it.</blockquote>
+        </aside>
+      </div>
+    </section>
+
+    <section class="stop" data-stop="5" id="mission-architecture">
+      <div class="waypoint">WP · 05</div>
+      <div class="stop-grid">
+        <article class="project-card featured-card">
+          <header>
+            <p class="eyebrow">MISSION ARCHITECTURE</p>
+            <h2>Connect engineering decisions to the operational system around them.</h2>
+          </header>
+          <p class="project-lede">The Mission Architecture CONOPS Simulator grew from a simple question: what if the engineering team could explore interfaces, mission flow, sources, and system relationships in one deterministic environment instead of reading them as disconnected documents?</p>
+          <div class="project-links">
+            <a href="https://github.com/Greyframe-Labs/mission-architecture-conops-simulator" target="_blank" rel="noreferrer">MISSION ARCHITECTURE CONOPS SIMULATOR <span>↗</span></a>
+          </div>
+          <div class="build-list">
+            <div><b>Architecture workspace</b><span>Mission, system, source, and interface views designed to remain traceable to supporting material.</span></div>
+            <div><b>Deterministic simulation</b><span>A software foundation for reasoning about system behavior instead of treating the architecture as a static slide.</span></div>
+            <div><b>Builder trajectory</b><span>Mechanical design knowledge, PLM thinking, automation, and mission context converging into one tool.</span></div>
+          </div>
+        </article>
+        <aside class="field-note accent-note">
+          <span class="pin"></span>
+          <p class="note-label">THE THROUGH LINE</p>
+          <h3>Hardware → product data → automation → architecture.</h3>
+          <p>Each step came from wanting to understand a larger part of the engineering system and then build something useful with that understanding.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="stop finale" data-stop="6" id="brief">
+      <div class="waypoint">FINAL · BRIEF</div>
+      <div class="final-shell">
+        <div class="final-copy">
+          <p class="eyebrow">ARRIVAL POINT</p>
+          <h2>The next artifact is the candidate briefing.</h2>
+          <p>The portfolio shows the route. The video explains how I think, what I built, and why I believe that combination fits a PLM Developer role at Anduril.</p>
+          <div class="final-signals">
+            <span>Hardware fluency</span>
+            <span>PLM ownership</span>
+            <span>Automation instinct</span>
+            <span>Mission context</span>
+          </div>
+        </div>
+        <div class="brief-terminal">
+          <div class="terminal-top"><span>SECURE PROJECT BRIEF</span><i>READY</i></div>
+          <div class="terminal-core">
+            <div class="terminal-mark">G</div>
+            <p>Encrypted recruiter briefing</p>
+            <strong>MAXIM TELEGUZ / PLM DEVELOPER</strong>
+          </div>
+          <a class="brief-button" href="https://greyframe-labs.github.io/secure-project-brief/" target="_blank" rel="noreferrer">OPEN RECRUITER BRIEF <span>→</span></a>
+          <small>Prototype handoff. The secure project brief remains a separate encrypted page during testing.</small>
+        </div>
+      </div>
+      <footer class="final-footer">GREYFRAME LABS · CANDIDATE PROJECT ROUTE · 2026</footer>
+    </section>
+  </main>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
