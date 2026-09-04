@@ -21,7 +21,7 @@ const initial = await page.evaluate(() => ({
   shipCanvas: Boolean(document.getElementById('ship3d')),
 }));
 
-// The existing illustrated world must remain Canvas 2D. Only the ship is WebGL.
+// The illustrated world remains the exact Canvas 2D renderer and art direction.
 if (initial.canvas.engine !== 'canvas-2d') throw new Error(`Background renderer changed unexpectedly: ${initial.canvas.engine}`);
 if (initial.canvas.movement !== 'forward-chase-perspective') {
   throw new Error(`Canvas prototype lost the forward chase movement contract: ${initial.canvas.movement}`);
@@ -30,13 +30,31 @@ if (initial.canvas.palette !== 'fox-paper-earth') {
   throw new Error(`Canvas prototype lost the fox/paper palette contract: ${initial.canvas.palette}`);
 }
 if (!initial.worldCanvas || !initial.shipCanvas) throw new Error('Hybrid renderer is missing one of its two canvas layers.');
+
+// Only the ship is 3D, and it must use the original live3d third-person chase
+// contract rather than the later orthographic/top-down overlay experiment.
 if (initial.ship.engine !== 'three-overlay') throw new Error(`Unexpected ship renderer: ${initial.ship.engine}`);
+if (initial.ship.model !== 'documented-procedural-stub-v2') {
+  throw new Error(`Unexpected 3D ship model: ${initial.ship.model}`);
+}
+if (initial.ship.flightContract !== 'original-live3d-third-person-chase') {
+  throw new Error(`Original chase flight contract was not restored: ${initial.ship.flightContract}`);
+}
+if (initial.ship.cameraType !== 'perspective') {
+  throw new Error(`Ship camera must be perspective, not top-down/orthographic: ${initial.ship.cameraType}`);
+}
 if (initial.ship.backgroundRenderer !== 'canvas-2d') {
-  throw new Error(`3D ship is not following the Canvas 2D world state: ${initial.ship.backgroundRenderer}`);
+  throw new Error(`3D ship is not layered over the Canvas 2D world: ${initial.ship.backgroundRenderer}`);
 }
-if (initial.ship.movement !== 'forward-chase-perspective' || initial.ship.palette !== 'fox-paper-earth') {
-  throw new Error('3D ship overlay lost the canvas movement/palette contract.');
+if (initial.ship.rendered3dWorldItems.length !== 0) {
+  throw new Error(`Old 3D world items were reintroduced: ${initial.ship.rendered3dWorldItems.join(', ')}`);
 }
+if (initial.canvas.shipRenderer !== 'original-live3d-third-person-chase') {
+  throw new Error(`Canvas expects the wrong ship renderer: ${initial.canvas.shipRenderer}`);
+}
+
+const startShip = initial.ship.ship;
+const startCamera = initial.ship.camera;
 
 await page.evaluate(() => {
   const max = document.documentElement.scrollHeight - window.innerHeight;
@@ -56,6 +74,25 @@ if (automation.canvas.trailMode !== 'orbit' || automation.canvas.activeStop !== 
 }
 if (Math.abs(automation.ship.progress - automation.canvas.progress) > 0.01) {
   throw new Error(`3D ship lost synchronization with the canvas: ship=${automation.ship.progress}, canvas=${automation.canvas.progress}`);
+}
+
+const shipMoved = Math.hypot(
+  automation.ship.ship.x - startShip.x,
+  automation.ship.ship.y - startShip.y,
+  automation.ship.ship.z - startShip.z,
+);
+const cameraMoved = Math.hypot(
+  automation.ship.camera.x - startCamera.x,
+  automation.ship.camera.y - startCamera.y,
+  automation.ship.camera.z - startCamera.z,
+);
+if (shipMoved < 20) throw new Error(`3D ship did not travel through the original 3D route: displacement=${shipMoved}`);
+if (cameraMoved < 20) throw new Error(`Perspective chase camera did not follow the ship: displacement=${cameraMoved}`);
+if (Math.abs(automation.ship.ship.roll) < 0.01 && Math.abs(automation.ship.ship.pitch) < 0.01) {
+  throw new Error('3D ship attitude remained flat; original banking/pitch behavior is missing.');
+}
+if (automation.ship.camera.fov < 47.9) {
+  throw new Error(`Unexpected chase camera FOV: ${automation.ship.camera.fov}`);
 }
 
 await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -82,12 +119,15 @@ if (browserErrors.length) throw new Error(`Browser diagnostics:\n${browserErrors
 
 console.log('[portfolio-canvas] PASS');
 console.log(`[portfolio-canvas] background=${initial.canvas.engine}`);
-console.log(`[portfolio-canvas] ship=${initial.ship.engine}`);
-console.log(`[portfolio-canvas] movement=${initial.canvas.movement}`);
+console.log(`[portfolio-canvas] ship=${initial.ship.model}`);
+console.log(`[portfolio-canvas] flight=${initial.ship.flightContract}`);
+console.log(`[portfolio-canvas] camera=${initial.ship.cameraType}`);
+console.log(`[portfolio-canvas] 3dWorldItems=${initial.ship.rendered3dWorldItems.length}`);
 console.log(`[portfolio-canvas] palette=${initial.canvas.palette}`);
 console.log(`[portfolio-canvas] automationStop=${automation.canvas.activeStop}`);
 console.log(`[portfolio-canvas] trailMode=${automation.canvas.trailMode}`);
-console.log(`[portfolio-canvas] renderScale=${automation.canvas.renderScale.toFixed(2)}`);
+console.log(`[portfolio-canvas] shipDisplacement=${shipMoved.toFixed(2)}`);
+console.log(`[portfolio-canvas] cameraDisplacement=${cameraMoved.toFixed(2)}`);
 console.log(`[portfolio-canvas] forwardLoop=${beforeLoop.loopCycle}->${afterLoop.loopCycle}`);
 console.log(`[portfolio-canvas] reverseLoop=${beforeReverse.loopCycle}->${afterReverse.loopCycle}`);
 
