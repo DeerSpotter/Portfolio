@@ -1,43 +1,44 @@
-# The Cartographer's Desk — for the Claude reading this repo
+# Portfolio — live 3D flight branch
 
-This repo is a **scrollable, hand-painted field-map of one person's life/career**. A
-fox mascot travels a paper map east through six waypoints; it loops forever. It was
-built as a gift and is meant to be **cloned and made your own**.
+This branch is a ground-up replacement of the previous hand-painted cartographer map. The new direction is a scroll-driven, third-person 3D portfolio journey.
 
-## The one thing to know
+## Current objective
 
-**`index.html` is the engine — don't edit it to change content.** It draws the paper
-wall, the travelling mascot, the smooth loop, the QA hooks. All the *content* — the
-person's name, their chapters, the note cards, the aphorisms, which artwork sits where
-— lives in **`map.config.js`**. That's the file you edit.
+Prove the flight system before migrating portfolio content.
 
-```
-index.html        the engine (Three.js scene, scroll, loop) — leave it alone
-map.config.js     ← EDIT THIS. the whole map as plain data. schema is at the top.
-assets/*.png      the painted world, baked to transparent watercolor
-prompts/          the exact art recipe (style block + per-plate subject lines)
-bake_alpha.py     white background → transparent watercolor
-rematte.py        repair a plate whose interior whites went see-through
-verify.mjs        headless QA (asserts assets load, mascot grounds, no scroll jank)
+The current implementation must stay deterministic from native scroll position:
+
+```text
+browser scroll position
+        -> target timeline progress
+        -> damped actual progress
+        -> 3D route position/tangent
+        -> ship yaw/pitch/roll
+        -> chase camera
+        -> warp intensity from scroll velocity
 ```
 
-## If the user wants to make this map their own
+Do not turn this into a timer-driven one-way animation. Forward and reverse scrolling must reconstruct the same world state.
 
-Use the **`make-your-map`** skill (in `.claude/skills/make-your-map/`) — or the plain
-`/make-your-map` command. It interviews them in a few questions, rewrites
-`map.config.js`, optionally swaps the artwork via `prompts/` + `bake_alpha.py`, previews
-locally, and deploys to their own GitHub Pages. A human-readable version of the same
-steps is in `MAKE-YOUR-OWN.md`.
+## Files
 
-The golden rule the skill follows: **give them a working map early.** The map runs on
-the shipped placeholder art, so their own words land on the real map before any image
-is generated. Art is the last, optional (paid) step — never block the map on it.
-
-## Running it
-
-```bash
-python3 -m http.server 8231   # → http://localhost:8231
+```text
+index.html                  page shell, HUD, native scroll surface
+src/live3d.js               Three.js world, route, camera and flight controller
+src/ship-stub.js            documented temporary procedural ship asset
+docs/LIVE3D_PROTOTYPE.md    prototype contract and final GLB requirements
+verify.mjs                  headless regression proof
 ```
 
-No build step. `map.config.js` is loaded as an ES module by `index.html`, so it must
-be served over http (not opened as a `file://`).
+## Ship stub rule
+
+The procedural ship is a documented stub. It exists only to develop movement before the final GLB asset is selected. Do not quietly evolve it into the final production asset. Replace the stub module cleanly when the real ship arrives.
+
+## Engineering rules
+
+- No monkey patching.
+- Do not suppress runtime, build, or test errors.
+- Replace superseded implementations instead of hiding them behind dead branches in runtime code.
+- Keep camera motion calmer than ship motion so aggressive banking does not destroy readability.
+- Keep the live experience static-host compatible with GitHub Pages.
+- If an external runtime dependency remains during prototyping, document it explicitly and provide a plan to vendor or bundle it before production.

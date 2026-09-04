@@ -1,0 +1,100 @@
+name: Live 3D Prototype Browser Proof
+
+on:
+  push:
+    branches:
+      - feature/cinematic-portfolio-map
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  browser-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install browser test dependency
+        run: |
+          npm init -y
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start static site
+        run: |
+          python3 -m http.server 8231 > /tmp/portfolio-http.log 2>&1 &
+          echo $! > /tmp/portfolio-http.pid
+          sleep 2
+
+      - name: Run scroll flight proof and capture real diagnostic
+        id: browser_test
+        shell: bash
+        run: |
+          set +e
+          node verify.mjs > live3d-diagnostic.txt 2>&1
+          status=$?
+          set -e
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          cat live3d-diagnostic.txt
+          exit 0
+
+      - name: Publish or update PR diagnostic
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          TEST_STATUS: ${{ steps.browser_test.outputs.status }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- live3d-prototype-ci -->';
+            const status = process.env.TEST_STATUS || 'unknown';
+            let diagnostic = 'Diagnostic file was not produced.';
+            if (fs.existsSync('live3d-diagnostic.txt')) {
+              diagnostic = fs.readFileSync('live3d-diagnostic.txt', 'utf8').trim();
+            }
+            if (diagnostic.length > 12000) {
+              diagnostic = diagnostic.slice(-12000);
+            }
+
+            const { owner, repo } = context.repo;
+            const head = `${owner}:feature/cinematic-portfolio-map`;
+            const prs = await github.rest.pulls.list({ owner, repo, state: 'open', head });
+            if (!prs.data.length) {
+              core.warning(`No open PR found for ${head}; diagnostic remains in the workflow log.`);
+              return;
+            }
+            const issue_number = prs.data[0].number;
+            const outcome = status === '0' ? 'PASS' : 'FAIL';
+            const body = `${marker}\n## Live 3D browser proof: ${outcome}\n\nCommit: \`${context.sha}\`\n\n\`\`\`text\n${diagnostic}\n\`\`\``;
+
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const existing = comments.data.find(comment => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Fail normally after diagnostic is published
+        if: always()
+        shell: bash
+        env:
+          TEST_STATUS: ${{ steps.browser_test.outputs.status }}
+        run: |
+          if [ "${TEST_STATUS:-1}" != "0" ]; then
+            echo "Live 3D browser proof failed. Diagnostic was published to the PR conversation."
+            cat live3d-diagnostic.txt || true
+            exit "${TEST_STATUS:-1}"
+          fi
+          echo "Live 3D browser proof passed."
