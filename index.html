@@ -4,19 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
-  <title>Maxim Teleguz — Live 3D Portfolio Flight Prototype</title>
+  <title>Maxim Teleguz — Canvas Portfolio Flight Prototype</title>
   <style>
     * { box-sizing: border-box; }
-    html {
-      background: #02040a url('./assets/live3d/nebula-backdrop.svg') center / cover fixed no-repeat;
-    }
+    html { background: #020307; }
     body {
       margin: 0;
       min-height: 900vh;
-      background:
-        radial-gradient(circle at 50% 44%, rgba(24, 58, 122, .14), transparent 34%),
-        linear-gradient(rgba(1, 3, 10, .10), rgba(1, 3, 10, .28));
-      color: #f5f7ff;
+      overflow-x: hidden;
+      background: #020307;
+      color: #f6f8ff;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     #world {
@@ -25,7 +22,7 @@
       width: 100%;
       height: 100%;
       display: block;
-      background: transparent;
+      background: #020307;
     }
     #hud {
       position: fixed;
@@ -33,164 +30,141 @@
       z-index: 5;
       pointer-events: none;
       padding: clamp(18px, 3vw, 38px);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
     }
     .hud-top {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 20px;
+      gap: 24px;
     }
     .identity {
       max-width: min(620px, 72vw);
-      text-shadow: 0 2px 18px rgba(0,0,0,.95);
+      text-shadow: 0 2px 16px rgba(0,0,0,.92);
     }
     .eyebrow {
       margin: 0 0 8px;
-      font-size: 11px;
+      font-size: 10px;
       letter-spacing: .22em;
       text-transform: uppercase;
-      color: #9aabc7;
+      color: #9db0cd;
     }
     h1 {
       margin: 0;
-      font-size: clamp(25px, 4vw, 50px);
+      font-size: clamp(28px, 4vw, 52px);
       line-height: .98;
-      font-weight: 680;
-      letter-spacing: -.035em;
+      font-weight: 720;
+      letter-spacing: -.04em;
     }
     .subtitle {
-      margin: 12px 0 0;
-      max-width: 60ch;
-      color: #c0cbe0;
-      font-size: clamp(13px, 1.5vw, 17px);
+      margin: 11px 0 0;
+      max-width: 58ch;
+      color: #c6d0e3;
+      font-size: clamp(13px, 1.35vw, 16px);
       line-height: 1.45;
     }
     .telemetry {
-      min-width: 168px;
+      min-width: 132px;
       padding: 8px 10px;
       text-align: right;
       color: #cbd5e7;
       font: 600 11px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       text-shadow: 0 2px 12px #000;
-      background: linear-gradient(90deg, transparent, rgba(1,4,13,.22));
-      border-right: 1px solid rgba(149, 190, 255, .18);
+      border-right: 1px solid rgba(149,190,255,.18);
+      background: linear-gradient(90deg, transparent, rgba(1,4,13,.20));
     }
-    .telemetry strong { color: #fff; font-weight: 700; }
+    .telemetry strong { color: #fff; }
+    .detail {
+      align-self: center;
+      justify-self: end;
+      width: min(370px, 34vw);
+      padding: 18px 18px 17px;
+      border: 1px solid rgba(154,194,255,.18);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(11,18,36,.58), rgba(5,8,18,.24));
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.28);
+      text-shadow: 0 2px 10px rgba(0,0,0,.75);
+    }
+    .detail .kicker,
+    .chapter .kicker {
+      display: block;
+      margin-bottom: 5px;
+      color: #93a7c7;
+      font-size: 9px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .detail h2 {
+      margin: 0;
+      font-size: clamp(18px, 2vw, 27px);
+      letter-spacing: -.02em;
+    }
+    .detail p {
+      margin: 9px 0 0;
+      color: #c8d3e8;
+      font-size: 13px;
+      line-height: 1.5;
+    }
     .hud-bottom {
       display: flex;
       align-items: flex-end;
       justify-content: space-between;
-      gap: 20px;
+      gap: 22px;
     }
     .hint {
-      max-width: 500px;
-      color: #c3cee0;
-      font-size: 13px;
+      max-width: 480px;
+      color: #b8c5dc;
+      font-size: 12px;
       line-height: 1.45;
       text-shadow: 0 2px 12px #000;
       transition: opacity .4s ease;
     }
     .hint b { color: #fff; }
-    .chapter {
-      text-align: right;
-      text-shadow: 0 2px 14px #000;
-    }
-    .chapter .kicker {
-      display: block;
-      margin-bottom: 4px;
-      color: #91a2c2;
-      font-size: 10px;
-      letter-spacing: .18em;
-      text-transform: uppercase;
-    }
-    .chapter .name {
-      font-size: clamp(17px, 2vw, 24px);
-      font-weight: 650;
-    }
-    #loading,
-    #fallback {
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      display: grid;
-      place-items: center;
-      padding: 30px;
-      background: #02040a;
-      color: #dfe7f6;
-      text-align: center;
-    }
-    #loading.done { opacity: 0; pointer-events: none; transition: opacity .5s ease; }
-    #fallback { display: none; }
-    .loading-card { max-width: 520px; }
-    .loading-card strong { display: block; margin-bottom: 8px; font-size: 20px; color: #fff; }
-    @media (max-width: 700px) {
+    .chapter { text-align: right; text-shadow: 0 2px 14px #000; }
+    .chapter .name { font-size: clamp(17px, 2vw, 24px); font-weight: 680; }
+    @media (max-width: 760px) {
       .hud-top { flex-direction: column; }
       .telemetry { text-align: left; border-right: 0; border-left: 1px solid rgba(149,190,255,.18); }
-      .subtitle { max-width: 88vw; }
+      .detail { width: min(88vw, 370px); justify-self: start; align-self: end; margin-bottom: 11vh; }
       .hud-bottom { align-items: flex-start; }
       .chapter { max-width: 45vw; }
     }
     @media (prefers-reduced-motion: reduce) {
-      body { min-height: 250vh; }
+      body { min-height: 300vh; }
       .hint::after { content: " Reduced-motion mode is active."; }
     }
   </style>
 </head>
 <body>
-  <canvas id="world" aria-label="Live 3D portfolio flight scene"></canvas>
-  <div id="loading"><div class="loading-card"><strong>Initializing flight path</strong>Loading the live 3D prototype…</div></div>
-  <div id="fallback"><div><strong>WebGL could not start.</strong><br>This prototype requires a WebGL-capable browser.</div></div>
+  <canvas id="world" aria-label="Stylized scroll-driven portfolio flight"></canvas>
 
   <div id="hud" aria-hidden="true">
     <div class="hud-top">
       <div class="identity">
-        <p class="eyebrow">Live 3D portfolio flight prototype</p>
+        <p class="eyebrow">Canvas portfolio flight prototype</p>
         <h1>Maxim Teleguz</h1>
-        <p class="subtitle">A scroll-driven third-person flight through a surreal engineering universe. The route now closes on itself, so reaching the last sector flows directly back into departure without ending the journey.</p>
+        <p class="subtitle">A lightweight illustrated flight through engineering, automation, AI systems, runtime work, and simulation. Scroll drives the journey; stopping near a waypoint lets the trailing line curl around it.</p>
       </div>
       <div class="telemetry">
-        DIST <strong id="distance">0000</strong><br>
-        VEL <strong id="velocity">0.00</strong><br>
-        BANK <strong id="bank">0°</strong><br>
-        WARP <strong id="warp">0%</strong><br>
+        VEL <strong id="velocity">0.0</strong><br>
         LOOP <strong id="cycle">+0</strong>
       </div>
     </div>
+
+    <section class="detail">
+      <span class="kicker">Current waypoint</span>
+      <h2 id="detailTitle">Departure</h2>
+      <p id="detailBody">A guided flight through engineering, automation, AI systems, runtime work, and simulation.</p>
+    </section>
+
     <div class="hud-bottom">
-      <div class="hint" id="hint"><b>Scroll</b> to fly forward or backward. Faster scrolling increases warp intensity. At either end the page recycles while the closed 3D path continues seamlessly.</div>
+      <div class="hint" id="hint"><b>Scroll</b> to fly. Pause near a waypoint and the trail settles into an orbit around it. The route loops continuously in either direction.</div>
       <div class="chapter"><span class="kicker">Current sector</span><span class="name" id="chapterName">Departure</span></div>
     </div>
   </div>
 
-  <!--
-    Unknown visitors start from the conservative medium scene. We deliberately do
-    not trust CPU/RAM labels as the final performance decision: live3d.js measures
-    actual frame time and dynamically lowers render resolution/effects if needed.
-    Explicit ?quality=low|medium|high remains available only for development/QA.
-  -->
-  <script>
-    (() => {
-      const allowed = new Set(['low', 'medium', 'high']);
-      const url = new URL(window.location.href);
-      if (!allowed.has(url.searchParams.get('quality'))) {
-        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        url.searchParams.set('quality', reduced ? 'low' : 'medium');
-        url.searchParams.set('auto', '1');
-        window.history.replaceState(null, '', url);
-      }
-    })();
-  </script>
-
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-    }
-  }
-  </script>
-  <script type="module" src="./src/live3d.js"></script>
+  <script type="module" src="./src/canvas-flight.js"></script>
 </body>
 </html>
