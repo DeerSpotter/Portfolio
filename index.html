@@ -165,6 +165,25 @@
     </div>
   </div>
 
+  <!--
+    Unknown visitors start from the conservative medium scene. We deliberately do
+    not trust CPU/RAM labels as the final performance decision: live3d.js measures
+    actual frame time and dynamically lowers render resolution/effects if needed.
+    Explicit ?quality=low|medium|high remains available only for development/QA.
+  -->
+  <script>
+    (() => {
+      const allowed = new Set(['low', 'medium', 'high']);
+      const url = new URL(window.location.href);
+      if (!allowed.has(url.searchParams.get('quality'))) {
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        url.searchParams.set('quality', reduced ? 'low' : 'medium');
+        url.searchParams.set('auto', '1');
+        window.history.replaceState(null, '', url);
+      }
+    })();
+  </script>
+
   <script type="importmap">
   {
     "imports": {
