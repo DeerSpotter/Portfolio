@@ -14,32 +14,63 @@ await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
 await page.waitForFunction(() => window.__portfolioDebug?.ready === true, null, { timeout: 15000 });
 
 const initial = await page.evaluate(() => structuredClone(window.__portfolioDebug));
-if (initial.shipAsset !== 'documented-procedural-stub') {
+if (initial.shipAsset !== 'documented-procedural-stub-v2') {
   throw new Error(`Unexpected ship asset contract: ${initial.shipAsset}`);
 }
+if (!initial.surrealEffects?.includes('energy-ribbons')) {
+  throw new Error('Surreal background/effect contract was not initialized.');
+}
 
-await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight * 0.58));
-await page.waitForTimeout(1100);
+await page.evaluate(() => window.scrollTo(0, (document.documentElement.scrollHeight - window.innerHeight) * 0.58));
+await page.waitForTimeout(1200);
 const middle = await page.evaluate(() => structuredClone(window.__portfolioDebug));
 
-if (!(middle.progress > initial.progress + 0.35)) {
-  throw new Error(`Scroll did not advance the world enough: ${initial.progress} -> ${middle.progress}`);
+if (!(middle.travel > initial.travel + 0.35)) {
+  throw new Error(`Scroll did not advance the world enough: ${initial.travel} -> ${middle.travel}`);
 }
-if (!(middle.ship.z < initial.ship.z - 150)) {
-  throw new Error(`Ship did not travel through world space: z ${initial.ship.z} -> ${middle.ship.z}`);
+const shipDisplacement = Math.hypot(
+  middle.ship.x - initial.ship.x,
+  middle.ship.y - initial.ship.y,
+  middle.ship.z - initial.ship.z,
+);
+if (!(shipDisplacement > 80)) {
+  throw new Error(`Ship did not travel through enough 3D world space: displacement=${shipDisplacement.toFixed(2)}`);
 }
 if (Math.abs(middle.ship.roll) < 0.01 && Math.abs(middle.ship.pitch) < 0.01) {
   throw new Error('Ship attitude stayed flat; expected route-driven pitch or roll.');
 }
-if (!(middle.camera.z < initial.camera.z - 140)) {
-  throw new Error(`Camera did not chase the ship: z ${initial.camera.z} -> ${middle.camera.z}`);
+const cameraDisplacement = Math.hypot(
+  middle.camera.x - initial.camera.x,
+  middle.camera.y - initial.camera.y,
+  middle.camera.z - initial.camera.z,
+);
+if (!(cameraDisplacement > 70)) {
+  throw new Error(`Camera did not chase the ship through world space: displacement=${cameraDisplacement.toFixed(2)}`);
+}
+
+await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+await page.waitForTimeout(800);
+const beforeLoop = await page.evaluate(() => structuredClone(window.__portfolioDebug));
+await page.mouse.move(900, 450);
+await page.mouse.wheel(0, 1000);
+await page.waitForTimeout(1000);
+const afterLoop = await page.evaluate(() => structuredClone(window.__portfolioDebug));
+
+if (!(afterLoop.loopCycle >= beforeLoop.loopCycle + 1)) {
+  throw new Error(`Forward end did not recycle into the next loop: ${beforeLoop.loopCycle} -> ${afterLoop.loopCycle}`);
+}
+if (!(afterLoop.travel > beforeLoop.travel - 0.08)) {
+  throw new Error(`Loop recycling caused virtual travel to jump backward: ${beforeLoop.travel} -> ${afterLoop.travel}`);
 }
 
 await page.evaluate(() => window.scrollTo(0, 0));
-await page.waitForTimeout(1200);
-const returned = await page.evaluate(() => structuredClone(window.__portfolioDebug));
-if (!(returned.progress < 0.08)) {
-  throw new Error(`Reverse scrolling did not reconstruct the departure state: progress=${returned.progress}`);
+await page.waitForTimeout(500);
+const beforeReverseLoop = await page.evaluate(() => structuredClone(window.__portfolioDebug));
+await page.mouse.wheel(0, -1000);
+await page.waitForTimeout(900);
+const afterReverseLoop = await page.evaluate(() => structuredClone(window.__portfolioDebug));
+if (!(afterReverseLoop.loopCycle <= beforeReverseLoop.loopCycle - 1)) {
+  throw new Error(`Reverse end did not recycle into the previous loop: ${beforeReverseLoop.loopCycle} -> ${afterReverseLoop.loopCycle}`);
 }
 
 if (browserErrors.length) {
@@ -51,5 +82,7 @@ console.log(`[portfolio-live3d] routeLength=${middle.routeLength.toFixed(2)}`);
 console.log(`[portfolio-live3d] middleChapter=${middle.chapter}`);
 console.log(`[portfolio-live3d] middleShip=(${middle.ship.x.toFixed(2)}, ${middle.ship.y.toFixed(2)}, ${middle.ship.z.toFixed(2)})`);
 console.log(`[portfolio-live3d] middleAttitude=(${middle.ship.pitch.toFixed(3)}, ${middle.ship.yaw.toFixed(3)}, ${middle.ship.roll.toFixed(3)})`);
+console.log(`[portfolio-live3d] forwardLoop=${beforeLoop.loopCycle}->${afterLoop.loopCycle}`);
+console.log(`[portfolio-live3d] reverseLoop=${beforeReverseLoop.loopCycle}->${afterReverseLoop.loopCycle}`);
 
 await browser.close();
