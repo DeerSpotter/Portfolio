@@ -573,7 +573,11 @@ function animate(now) {
   drawTrail(trailGhost, COLORS.olive, 1.0, 0.20);
   drawTrail(trail, COLORS.fox, 2.3, 0.64);
   if (activeStop) drawOrbitCurl(activeStop, progress, now);
-  drawShip(ship.x, ship.y, heading, Math.abs(velocity), now);
+
+  // The illustrated canvas stays exactly as the world renderer. The old 2D
+  // ship draw is intentionally disabled so the original procedural 3D ship can
+  // fly over this canvas with its original perspective chase camera.
+  // drawShip(ship.x, ship.y, heading, Math.abs(velocity), now);
 
   if (now % 100 < 17) {
     velocityEl.textContent = (Math.abs(velocity) * 100).toFixed(1);
@@ -598,6 +602,7 @@ function animate(now) {
     engine: 'canvas-2d',
     movement: 'forward-chase-perspective',
     palette: 'fox-paper-earth',
+    shipRenderer: 'original-live3d-third-person-chase',
   };
 
   requestAnimationFrame(animate);
