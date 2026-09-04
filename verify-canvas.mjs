@@ -12,31 +12,50 @@ page.on('console', message => {
 
 await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
 await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready === true, null, { timeout: 15000 });
+await page.waitForFunction(() => window.__portfolioShipDebug?.ready === true, null, { timeout: 15000 });
 
-const initial = await page.evaluate(() => structuredClone(window.__portfolioCanvasDebug));
-if (initial.engine !== 'canvas-2d') throw new Error(`Unexpected rendering engine: ${initial.engine}`);
-if (initial.movement !== 'forward-chase-perspective') {
-  throw new Error(`Canvas prototype lost the forward chase movement contract: ${initial.movement}`);
-}
-if (initial.palette !== 'fox-paper-earth') {
-  throw new Error(`Canvas prototype lost the fox/paper palette contract: ${initial.palette}`);
-}
+const initial = await page.evaluate(() => ({
+  canvas: structuredClone(window.__portfolioCanvasDebug),
+  ship: structuredClone(window.__portfolioShipDebug),
+  worldCanvas: Boolean(document.getElementById('world')),
+  shipCanvas: Boolean(document.getElementById('ship3d')),
+}));
 
-const external3d = await page.evaluate(() => Boolean(document.querySelector('script[src*="three"], script[src*="jsdelivr"]')));
-if (external3d) throw new Error('Canvas prototype unexpectedly depends on the prior Three.js/CDN path.');
+// The existing illustrated world must remain Canvas 2D. Only the ship is WebGL.
+if (initial.canvas.engine !== 'canvas-2d') throw new Error(`Background renderer changed unexpectedly: ${initial.canvas.engine}`);
+if (initial.canvas.movement !== 'forward-chase-perspective') {
+  throw new Error(`Canvas prototype lost the forward chase movement contract: ${initial.canvas.movement}`);
+}
+if (initial.canvas.palette !== 'fox-paper-earth') {
+  throw new Error(`Canvas prototype lost the fox/paper palette contract: ${initial.canvas.palette}`);
+}
+if (!initial.worldCanvas || !initial.shipCanvas) throw new Error('Hybrid renderer is missing one of its two canvas layers.');
+if (initial.ship.engine !== 'three-overlay') throw new Error(`Unexpected ship renderer: ${initial.ship.engine}`);
+if (initial.ship.backgroundRenderer !== 'canvas-2d') {
+  throw new Error(`3D ship is not following the Canvas 2D world state: ${initial.ship.backgroundRenderer}`);
+}
+if (initial.ship.movement !== 'forward-chase-perspective' || initial.ship.palette !== 'fox-paper-earth') {
+  throw new Error('3D ship overlay lost the canvas movement/palette contract.');
+}
 
 await page.evaluate(() => {
   const max = document.documentElement.scrollHeight - window.innerHeight;
   window.scrollTo(0, max * 0.34);
 });
 await page.waitForTimeout(1900);
-const automation = await page.evaluate(() => structuredClone(window.__portfolioCanvasDebug));
+const automation = await page.evaluate(() => ({
+  canvas: structuredClone(window.__portfolioCanvasDebug),
+  ship: structuredClone(window.__portfolioShipDebug),
+}));
 
-if (!(automation.progress > 0.28 && automation.progress < 0.40)) {
-  throw new Error(`Canvas flight did not advance to Automation region: progress=${automation.progress}`);
+if (!(automation.canvas.progress > 0.28 && automation.canvas.progress < 0.40)) {
+  throw new Error(`Canvas flight did not advance to Automation region: progress=${automation.canvas.progress}`);
 }
-if (automation.trailMode !== 'orbit' || automation.activeStop !== 'Automation') {
-  throw new Error(`Trail did not settle into Automation orbit: mode=${automation.trailMode}, stop=${automation.activeStop}`);
+if (automation.canvas.trailMode !== 'orbit' || automation.canvas.activeStop !== 'Automation') {
+  throw new Error(`Trail did not settle into Automation orbit: mode=${automation.canvas.trailMode}, stop=${automation.canvas.activeStop}`);
+}
+if (Math.abs(automation.ship.progress - automation.canvas.progress) > 0.01) {
+  throw new Error(`3D ship lost synchronization with the canvas: ship=${automation.ship.progress}, canvas=${automation.canvas.progress}`);
 }
 
 await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -62,11 +81,13 @@ if (!(afterReverse.loopCycle <= beforeReverse.loopCycle - 1)) {
 if (browserErrors.length) throw new Error(`Browser diagnostics:\n${browserErrors.join('\n')}`);
 
 console.log('[portfolio-canvas] PASS');
-console.log(`[portfolio-canvas] movement=${initial.movement}`);
-console.log(`[portfolio-canvas] palette=${initial.palette}`);
-console.log(`[portfolio-canvas] automationStop=${automation.activeStop}`);
-console.log(`[portfolio-canvas] trailMode=${automation.trailMode}`);
-console.log(`[portfolio-canvas] renderScale=${automation.renderScale.toFixed(2)}`);
+console.log(`[portfolio-canvas] background=${initial.canvas.engine}`);
+console.log(`[portfolio-canvas] ship=${initial.ship.engine}`);
+console.log(`[portfolio-canvas] movement=${initial.canvas.movement}`);
+console.log(`[portfolio-canvas] palette=${initial.canvas.palette}`);
+console.log(`[portfolio-canvas] automationStop=${automation.canvas.activeStop}`);
+console.log(`[portfolio-canvas] trailMode=${automation.canvas.trailMode}`);
+console.log(`[portfolio-canvas] renderScale=${automation.canvas.renderScale.toFixed(2)}`);
 console.log(`[portfolio-canvas] forwardLoop=${beforeLoop.loopCycle}->${afterLoop.loopCycle}`);
 console.log(`[portfolio-canvas] reverseLoop=${beforeReverse.loopCycle}->${afterReverse.loopCycle}`);
 
