@@ -7,95 +7,179 @@ import * as THREE from 'three';
  * path, banking, pitch, warp, and fly-by behavior before the final GLB ship is
  * commissioned. It is deliberately isolated behind createShipStub() so the
  * finished asset can replace this module without rewriting flight logic.
+ *
+ * Coordinate contract:
+ * - nose points toward local -Z
+ * - engines/exhaust point toward local +Z
+ * - +Y is ship-up
  */
 export function createShipStub() {
   const ship = new THREE.Group();
-  ship.name = 'portfolio-ship-stub';
+  ship.name = 'portfolio-ship-stub-v2';
 
   const hullMat = new THREE.MeshStandardMaterial({
-    color: 0x8b96a8,
-    metalness: 0.58,
+    color: 0x8997aa,
+    metalness: 0.72,
+    roughness: 0.28,
+  });
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: 0x334156,
+    metalness: 0.68,
     roughness: 0.34,
   });
   const darkMat = new THREE.MeshStandardMaterial({
-    color: 0x1f2633,
-    metalness: 0.72,
-    roughness: 0.25,
+    color: 0x101722,
+    metalness: 0.82,
+    roughness: 0.22,
   });
   const glassMat = new THREE.MeshStandardMaterial({
-    color: 0x2a435f,
-    emissive: 0x10243d,
-    emissiveIntensity: 0.8,
-    metalness: 0.45,
-    roughness: 0.16,
+    color: 0x173758,
+    emissive: 0x0d2947,
+    emissiveIntensity: 1.15,
+    metalness: 0.3,
+    roughness: 0.08,
   });
   const engineMat = new THREE.MeshStandardMaterial({
-    color: 0x8ad8ff,
-    emissive: 0x42a9ff,
-    emissiveIntensity: 2.8,
-    metalness: 0.2,
-    roughness: 0.15,
+    color: 0xa5e8ff,
+    emissive: 0x43b8ff,
+    emissiveIntensity: 3.4,
+    metalness: 0.15,
+    roughness: 0.08,
+  });
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: 0x2f78b7,
+    emissive: 0x0b3357,
+    emissiveIntensity: 0.75,
+    metalness: 0.58,
+    roughness: 0.24,
+  });
+  const plumeMat = new THREE.MeshBasicMaterial({
+    color: 0x73d9ff,
+    transparent: true,
+    opacity: 0.22,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
 
-  const saucer = new THREE.Mesh(new THREE.SphereGeometry(1.25, 48, 24), hullMat);
-  saucer.scale.set(1.65, 0.28, 1.05);
-  saucer.position.z = -0.15;
-  ship.add(saucer);
+  function addMesh(geometry, material, position, rotation, scale) {
+    const mesh = new THREE.Mesh(geometry, material);
+    if (position) mesh.position.set(...position);
+    if (rotation) mesh.rotation.set(...rotation);
+    if (scale) mesh.scale.set(...scale);
+    ship.add(mesh);
+    return mesh;
+  }
 
-  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.58, 32, 16), glassMat);
-  canopy.scale.set(1.1, 0.25, 0.78);
-  canopy.position.set(0, 0.16, -0.82);
-  ship.add(canopy);
+  function makeWing(side) {
+    const sx = side;
+    const top = [
+      [0.42 * sx, 0.04, -0.55],
+      [2.18 * sx, -0.01, 0.12],
+      [1.82 * sx, -0.01, 1.48],
+      [0.56 * sx, 0.03, 0.82],
+    ];
+    const bottom = top.map(([x, y, z]) => [x, y - 0.15, z]);
+    const vertices = [...top, ...bottom];
+    const faces = [
+      0, 1, 2, 0, 2, 3,
+      4, 6, 5, 4, 7, 6,
+      0, 4, 5, 0, 5, 1,
+      1, 5, 6, 1, 6, 2,
+      2, 6, 7, 2, 7, 3,
+      3, 7, 4, 3, 4, 0,
+    ];
+    const positions = new Float32Array(vertices.flat());
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setIndex(faces);
+    geometry.computeVertexNormals();
+    const wing = new THREE.Mesh(geometry, hullMat);
+    ship.add(wing);
 
-  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.36, 2.75), hullMat);
-  spine.position.set(0, -0.08, 1.02);
-  ship.add(spine);
+    const inset = wing.clone();
+    inset.material = accentMat;
+    inset.scale.set(0.72, 1.04, 0.72);
+    inset.position.set(0.18 * sx, 0.055, 0.12);
+    ship.add(inset);
+  }
 
-  const rear = new THREE.Mesh(new THREE.ConeGeometry(0.74, 1.7, 5), darkMat);
-  rear.rotation.x = Math.PI / 2;
-  rear.rotation.z = Math.PI;
-  rear.position.set(0, -0.08, 2.22);
-  rear.scale.y = 0.55;
-  ship.add(rear);
+  addMesh(new THREE.SphereGeometry(0.95, 48, 24), hullMat, [0, 0.02, -0.12], null, [0.82, 0.34, 1.62]);
+  addMesh(new THREE.ConeGeometry(0.58, 1.34, 32), hullMat, [0, -0.01, -1.72], [-Math.PI / 2, 0, 0], [1.05, 1, 0.78]);
+  addMesh(new THREE.SphereGeometry(0.58, 36, 18), glassMat, [0, 0.27, -0.67], null, [0.88, 0.26, 0.92]);
+  addMesh(new THREE.BoxGeometry(0.52, 0.18, 2.2), panelMat, [0, -0.18, 0.82]);
+  addMesh(new THREE.BoxGeometry(0.16, 0.11, 2.65), accentMat, [0, 0.2, 0.53]);
 
-  const nacelles = [];
+  makeWing(-1);
+  makeWing(1);
+
   const engineCores = [];
+  const enginePlumes = [];
   for (const side of [-1, 1]) {
-    const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.11, 1.4), hullMat);
-    pylon.position.set(side * 1.18, -0.02, 1.05);
-    pylon.rotation.z = side * 0.16;
-    ship.add(pylon);
+    addMesh(
+      new THREE.BoxGeometry(1.25, 0.12, 0.38),
+      panelMat,
+      [side * 0.98, -0.07, 0.57],
+      [0, side * 0.18, side * 0.035]
+    );
 
-    const nacelle = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 2.65), darkMat);
-    nacelle.position.set(side * 1.48, 0.02, 1.35);
-    nacelle.rotation.x = -0.02;
-    ship.add(nacelle);
-    nacelles.push(nacelle);
+    const nacelle = addMesh(
+      new THREE.CylinderGeometry(0.23, 0.27, 2.45, 28, 1, false),
+      darkMat,
+      [side * 1.58, -0.01, 0.88],
+      [Math.PI / 2, 0, 0],
+      [1.0, 1.0, 0.95]
+    );
+    nacelle.name = `nacelle-${side < 0 ? 'left' : 'right'}`;
 
-    const core = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.10, 2.2), engineMat);
-    core.position.set(side * 1.48, 0.11, 1.28);
-    ship.add(core);
+    addMesh(new THREE.CylinderGeometry(0.265, 0.265, 0.28, 28), panelMat, [side * 1.58, -0.01, -0.34], [Math.PI / 2, 0, 0]);
+    addMesh(new THREE.CylinderGeometry(0.27, 0.27, 0.24, 28), panelMat, [side * 1.58, -0.01, 2.10], [Math.PI / 2, 0, 0]);
+
+    const core = addMesh(new THREE.BoxGeometry(0.11, 0.10, 1.74), engineMat, [side * 1.58, 0.17, 0.87]);
     engineCores.push(core);
 
-    const exhaust = new THREE.Mesh(new THREE.CircleGeometry(0.115, 24), engineMat);
-    exhaust.position.set(side * 1.48, 0.02, 2.69);
-    exhaust.rotation.y = Math.PI;
-    ship.add(exhaust);
+    const exhaust = addMesh(new THREE.CircleGeometry(0.17, 32), engineMat, [side * 1.58, -0.01, 2.23]);
+    exhaust.name = `exhaust-${side < 0 ? 'left' : 'right'}`;
+
+    const plume = addMesh(
+      new THREE.CylinderGeometry(0.025, 0.16, 2.45, 18, 1, true),
+      plumeMat.clone(),
+      [side * 1.58, -0.01, 3.48],
+      [Math.PI / 2, 0, 0]
+    );
+    plume.material.opacity = 0.16;
+    enginePlumes.push(plume);
+
+    const engineLight = new THREE.PointLight(0x55c7ff, 2.6, 7.5, 2);
+    engineLight.position.set(side * 1.58, 0, 2.35);
+    ship.add(engineLight);
+  }
+
+  addMesh(new THREE.BoxGeometry(0.34, 0.16, 0.58), darkMat, [0, 0.25, 0.45]);
+  addMesh(new THREE.BoxGeometry(0.08, 0.38, 0.42), panelMat, [0, 0.34, 1.22], [-0.15, 0, 0]);
+  for (const side of [-1, 1]) {
+    addMesh(new THREE.BoxGeometry(0.08, 0.08, 0.8), accentMat, [side * 0.63, 0.12, 0.44]);
+    addMesh(new THREE.BoxGeometry(0.16, 0.08, 0.32), darkMat, [side * 0.54, 0.18, -0.22]);
   }
 
   ship.userData.engineMaterial = engineMat;
   ship.userData.engineCores = engineCores;
-  ship.userData.nacelles = nacelles;
-  ship.scale.setScalar(0.88);
+  ship.userData.enginePlumes = enginePlumes;
+  ship.userData.plumeBaseOpacity = 0.16;
+  ship.scale.setScalar(0.72);
   return ship;
 }
 
 export function setShipWarp(ship, amount) {
   const warp = THREE.MathUtils.clamp(amount, 0, 1);
   const material = ship.userData.engineMaterial;
-  if (material) material.emissiveIntensity = 2.8 + warp * 8.5;
+  if (material) material.emissiveIntensity = 3.4 + warp * 9.5;
 
   for (const core of ship.userData.engineCores || []) {
-    core.scale.z = 1 + warp * 0.22;
+    core.scale.z = 1 + warp * 0.34;
+  }
+  for (const plume of ship.userData.enginePlumes || []) {
+    plume.scale.y = 1 + warp * 2.6;
+    plume.material.opacity = (ship.userData.plumeBaseOpacity || 0.16) + warp * 0.38;
   }
 }
