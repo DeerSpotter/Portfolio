@@ -10,27 +10,42 @@ const hintEl = document.getElementById('hint');
 
 const TAU = Math.PI * 2;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const random = mulberry32(0x51a7f00d);
 const stars = [];
+const paperMarks = [];
 const trail = [];
 const trailGhost = [];
-const random = mulberry32(0x51a7f00d);
+
+const COLORS = {
+  paper: '#e7d8b8',
+  paperLight: '#f0e3c5',
+  paperDeep: '#c9ad78',
+  ink: '#3b2f21',
+  muted: '#8a765a',
+  fox: '#cf6f2f',
+  rust: '#96543f',
+  olive: '#66713f',
+  blue: '#4c6378',
+  plum: '#694f66',
+  gold: '#a9792f',
+};
 
 const stops = [
-  { at: 0.04, title: 'Departure', body: 'A guided flight through engineering, automation, AI systems, runtime work, and simulation.', color: '#78d8ff', x: 0.28, y: 0.33 },
-  { at: 0.18, title: 'Engineering Foundations', body: 'Mechanical design, NX, Teamcenter, PLM problem solving, and years of real engineering constraints.', color: '#6bc8ff', x: 0.72, y: 0.30 },
-  { at: 0.34, title: 'Automation', body: 'Tools that reduce repetitive engineering work, expose failures clearly, and make difficult workflows simpler.', color: '#c18cff', x: 0.25, y: 0.58 },
-  { at: 0.51, title: 'AI Systems', body: 'Context portability, agent workflows, human approval boundaries, and AI-assisted engineering with verification.', color: '#76f1cf', x: 0.76, y: 0.42 },
-  { at: 0.69, title: 'Runtime Engineering', body: 'Compatibility layers, ARM64 execution, generated adapters, filesystem boundaries, and fail-closed diagnostics.', color: '#ff8ab9', x: 0.29, y: 0.67 },
-  { at: 0.85, title: 'Mission Systems', body: 'Simulation, operational visualization, source-grounded capability modeling, and complex systems made explorable.', color: '#f7c972', x: 0.73, y: 0.62 },
+  { at: 0.04, title: 'Departure', body: 'A guided flight through engineering, automation, AI systems, runtime work, and simulation.', color: COLORS.fox, side: -0.20, lift: -0.02 },
+  { at: 0.18, title: 'Engineering Foundations', body: 'Mechanical design, NX, Teamcenter, PLM problem solving, and years of real engineering constraints.', color: COLORS.olive, side: 0.66, lift: -0.16 },
+  { at: 0.34, title: 'Automation', body: 'Tools that reduce repetitive engineering work, expose failures clearly, and make difficult workflows simpler.', color: COLORS.blue, side: -0.68, lift: 0.10 },
+  { at: 0.51, title: 'AI Systems', body: 'Context portability, agent workflows, human approval boundaries, and AI-assisted engineering with verification.', color: COLORS.plum, side: 0.62, lift: -0.05 },
+  { at: 0.69, title: 'Runtime Engineering', body: 'Compatibility layers, ARM64 execution, generated adapters, filesystem boundaries, and fail-closed diagnostics.', color: COLORS.rust, side: -0.62, lift: 0.14 },
+  { at: 0.85, title: 'Mission Systems', body: 'Simulation, operational visualization, source-grounded capability modeling, and complex systems made explorable.', color: COLORS.gold, side: 0.68, lift: 0.05 },
 ];
 
 const planets = [
-  { at: 0.10, r: 78, x: 0.76, y: 0.24, c1: '#5bc7ff', c2: '#174c85', ring: true, tilt: -0.28 },
-  { at: 0.27, r: 54, x: 0.18, y: 0.28, c1: '#d99cff', c2: '#5a2b81', ring: false, tilt: 0 },
-  { at: 0.44, r: 96, x: 0.82, y: 0.70, c1: '#63e6ca', c2: '#155d62', ring: true, tilt: 0.22 },
-  { at: 0.61, r: 62, x: 0.22, y: 0.72, c1: '#ff8fbd', c2: '#742c59', ring: true, tilt: -0.44 },
-  { at: 0.79, r: 86, x: 0.78, y: 0.30, c1: '#ffc776', c2: '#7d4d21', ring: false, tilt: 0 },
-  { at: 0.94, r: 48, x: 0.20, y: 0.46, c1: '#8da8ff', c2: '#334174', ring: true, tilt: 0.38 },
+  { at: 0.10, r: 62, side: 0.72, lift: -0.18, c1: '#d99554', c2: '#8e5c31', ring: true, tilt: -0.30 },
+  { at: 0.27, r: 46, side: -0.76, lift: -0.12, c1: '#87906a', c2: '#545d3b', ring: false, tilt: 0 },
+  { at: 0.44, r: 75, side: 0.80, lift: 0.12, c1: '#8195a0', c2: '#4c6378', ring: true, tilt: 0.23 },
+  { at: 0.61, r: 52, side: -0.74, lift: 0.14, c1: '#bd735d', c2: '#7a4537', ring: true, tilt: -0.42 },
+  { at: 0.79, r: 66, side: 0.74, lift: -0.10, c1: '#d0a85c', c2: '#87672f', ring: false, tilt: 0 },
+  { at: 0.94, r: 42, side: -0.68, lift: -0.02, c1: '#8e7b79', c2: '#694f66', ring: true, tilt: 0.36 },
 ];
 
 let cssW = innerWidth;
@@ -81,17 +96,19 @@ function resize() {
   canvas.style.width = `${cssW}px`;
   canvas.style.height = `${cssH}px`;
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  rebuildStars();
+  rebuildBackdrop();
 }
 
-function rebuildStars() {
+function rebuildBackdrop() {
   stars.length = 0;
-  const count = degraded ? 90 : 190;
-  for (let i = 0; i < count; i++) {
-    stars.push({
-      x: random(), y: random(), size: 0.55 + random() * 1.8,
-      layer: 0.15 + random() * 0.85, twinkle: random() * TAU,
-    });
+  paperMarks.length = 0;
+  const starCount = degraded ? 65 : 130;
+  const markCount = degraded ? 30 : 68;
+  for (let i = 0; i < starCount; i++) {
+    stars.push({ x: random(), y: random(), size: 0.4 + random() * 1.4, layer: 0.12 + random() * 0.88, phase: random() * TAU });
+  }
+  for (let i = 0; i < markCount; i++) {
+    paperMarks.push({ x: random(), y: random(), len: 5 + random() * 24, tilt: (random() - 0.5) * 0.5, alpha: 0.025 + random() * 0.045 });
   }
 }
 
@@ -104,7 +121,7 @@ function updateTargetFromScroll() {
   const { local } = scrollMetrics();
   targetTravel = loopCycle + local;
   if (Math.abs(scrollY - lastScrollY) > 2) lastMotionTime = performance.now();
-  if (Math.abs(scrollY - lastScrollY) > 12) hintEl.style.opacity = '0.35';
+  if (Math.abs(scrollY - lastScrollY) > 12) hintEl.style.opacity = '0.36';
   lastScrollY = scrollY;
 }
 
@@ -140,68 +157,128 @@ addEventListener('wheel', event => {
 addEventListener('resize', resize, { passive: true });
 addEventListener('visibilitychange', () => { if (!document.hidden) lastTime = performance.now(); });
 
-function routePoint(progress) {
-  const a = progress * TAU;
+function vanishingPoint(progress) {
   return {
-    x: cssW * 0.50 + Math.sin(a * 1.8) * cssW * 0.115 + Math.sin(a * 4.4) * cssW * 0.020,
-    y: cssH * 0.58 + Math.cos(a * 1.35) * cssH * 0.085 + Math.sin(a * 3.2) * cssH * 0.025,
+    x: cssW * (0.50 + Math.sin(progress * TAU * 1.10) * 0.035),
+    y: cssH * (0.35 + Math.cos(progress * TAU * 0.75) * 0.025),
   };
 }
 
-function routeTangent(progress) {
-  const p1 = routePoint(wrap01(progress - 0.002));
-  const p2 = routePoint(wrap01(progress + 0.002));
+function shipPoint(progress) {
+  return {
+    x: cssW * (0.50 + Math.sin(progress * TAU * 1.45) * 0.070 + Math.sin(progress * TAU * 3.1) * 0.018),
+    y: cssH * (0.72 + Math.cos(progress * TAU * 1.20) * 0.030),
+  };
+}
+
+function shipHeading(progress) {
+  const p1 = shipPoint(wrap01(progress - 0.003));
+  const p2 = shipPoint(wrap01(progress + 0.003));
   return Math.atan2(p2.y - p1.y, p2.x - p1.x);
 }
 
-function relativeScreen(obj, progress, depthScale = 1) {
+// Perspective projection for a chase-camera illusion. Objects ahead are born
+// near the vanishing point, grow as the ship approaches, then sweep past the
+// left/right foreground. This intentionally preserves the movement language of
+// the live-3D prototype instead of turning the journey into side-scrolling.
+function projectObject(obj, progress, depthScale = 1) {
   const rel = wrapSigned(obj.at - progress);
-  if (rel < -0.09 || rel > 0.38) return null;
-  const z = clamp((rel + 0.09) / 0.47, 0, 1);
-  const near = 1 - z;
-  const vanX = cssW * 0.52;
-  const vanY = cssH * 0.42;
-  const targetX = obj.x * cssW;
-  const targetY = obj.y * cssH;
-  const expansion = 0.35 + near * 0.95 * depthScale;
-  return {
-    x: vanX + (targetX - vanX) * expansion,
-    y: vanY + (targetY - vanY) * expansion,
-    scale: 0.30 + near * 1.18,
-    alpha: clamp(Math.sin(clamp((1 - z) * Math.PI, 0, Math.PI)) * 1.8, 0.12, 1),
-    rel,
-  };
+  if (rel < -0.055 || rel > 0.36) return null;
+
+  const vp = vanishingPoint(progress);
+  const t = clamp((0.36 - rel) / 0.415, 0, 1); // 0=far, 1=passing camera
+  const perspective = 0.10 + Math.pow(t, 1.85) * 1.72 * depthScale;
+  const side = obj.side || 0;
+  const lift = obj.lift || 0;
+  const laneX = cssW * (0.50 + side * 0.46);
+  const laneY = cssH * (0.50 + lift * 0.55);
+
+  const passKick = rel < 0 ? Math.pow(clamp(-rel / 0.055, 0, 1), 1.2) : 0;
+  const x = vp.x + (laneX - vp.x) * perspective + side * cssW * 0.28 * passKick;
+  const y = vp.y + (laneY - vp.y) * perspective + cssH * 0.18 * passKick;
+  const scale = 0.16 + Math.pow(t, 1.55) * 1.55;
+  const alpha = clamp(t * 2.7, 0.10, 1) * clamp((0.38 - rel) * 8, 0.2, 1);
+  return { x, y, scale, alpha, rel, t };
 }
 
 function clearBackground(progress) {
   const g = ctx.createLinearGradient(0, 0, 0, cssH);
-  const hue = (progress * 210 + 210) % 360;
-  g.addColorStop(0, `hsl(${hue} 45% 8%)`);
-  g.addColorStop(0.55, `hsl(${(hue + 32) % 360} 48% 5%)`);
-  g.addColorStop(1, '#020307');
+  g.addColorStop(0, COLORS.paperLight);
+  g.addColorStop(0.58, COLORS.paper);
+  g.addColorStop(1, '#d3bb8c');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, cssW, cssH);
 
-  const glow = ctx.createRadialGradient(cssW * 0.5, cssH * 0.42, 0, cssW * 0.5, cssH * 0.42, Math.max(cssW, cssH) * 0.52);
-  glow.addColorStop(0, 'rgba(86,143,255,.10)');
-  glow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = glow;
+  const vp = vanishingPoint(progress);
+  const wash = ctx.createRadialGradient(vp.x, vp.y, 0, vp.x, vp.y, Math.max(cssW, cssH) * 0.58);
+  wash.addColorStop(0, 'rgba(255,248,225,.72)');
+  wash.addColorStop(0.45, 'rgba(207,111,47,.055)');
+  wash.addColorStop(1, 'rgba(120,88,45,0)');
+  ctx.fillStyle = wash;
   ctx.fillRect(0, 0, cssW, cssH);
+
+  ctx.save();
+  for (const mark of paperMarks) {
+    ctx.globalAlpha = mark.alpha;
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    const x = mark.x * cssW;
+    const y = mark.y * cssH;
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(mark.tilt) * mark.len, y + Math.sin(mark.tilt) * mark.len);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPerspectiveGuide(progress) {
+  const vp = vanishingPoint(progress);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(86,68,44,.11)';
+  ctx.lineWidth = 1;
+  for (const edge of [-0.46, -0.23, 0.23, 0.46]) {
+    ctx.beginPath();
+    ctx.moveTo(vp.x, vp.y);
+    ctx.lineTo(cssW * (0.5 + edge), cssH * 1.02);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.08;
+  for (let i = 1; i <= 5; i++) {
+    const y = vp.y + (cssH - vp.y) * Math.pow(i / 5, 1.7);
+    ctx.beginPath();
+    ctx.ellipse(vp.x, y, cssW * 0.10 * i, cssH * 0.018 * i, 0, 0, TAU);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawStars(progress, now) {
-  const speed = velocity * 0.16;
+  const vp = vanishingPoint(progress);
+  const warp = clamp(Math.abs(velocity) * 4.5, 0, 1);
+  ctx.save();
   for (const star of stars) {
-    const px = wrap01(star.x - progress * star.layer * 1.8 + speed) * cssW;
-    const py = wrap01(star.y + Math.sin(progress * TAU + star.twinkle) * 0.008 * star.layer) * cssH;
-    const alpha = 0.28 + Math.sin(now * 0.0014 + star.twinkle) * 0.14;
+    const phase = wrap01(star.x + progress * star.layer * 0.92);
+    const depth = 0.10 + phase * 0.90;
+    const spread = Math.pow(depth, 1.7);
+    const sx = vp.x + (star.x - 0.5) * cssW * 1.10 * spread;
+    const sy = vp.y + (star.y - 0.28) * cssH * 0.95 * spread;
+    const alpha = 0.10 + star.layer * 0.22 + Math.sin(now * 0.001 + star.phase) * 0.04;
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = '#dcecff';
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = star.size;
     ctx.beginPath();
-    ctx.arc(px, py, star.size * (0.55 + star.layer * 0.65), 0, TAU);
-    ctx.fill();
+    ctx.moveTo(sx, sy);
+    if (warp > 0.10) {
+      const dx = sx - vp.x;
+      const dy = sy - vp.y;
+      ctx.lineTo(sx + dx * 0.045 * warp, sy + dy * 0.045 * warp);
+    } else {
+      ctx.lineTo(sx + 0.1, sy + 0.1);
+    }
+    ctx.stroke();
   }
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 function drawPlanet(planet, screen) {
@@ -213,64 +290,82 @@ function drawPlanet(planet, screen) {
   if (planet.ring) {
     ctx.save();
     ctx.rotate(planet.tilt);
-    ctx.strokeStyle = planet.c1;
-    ctx.globalAlpha *= 0.44;
-    ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.strokeStyle = COLORS.ink;
+    ctx.globalAlpha *= 0.28;
+    ctx.lineWidth = Math.max(1.2, r * 0.055);
     ctx.beginPath();
-    ctx.ellipse(0, 0, r * 1.65, r * 0.42, 0, 0, TAU);
+    ctx.ellipse(0, 0, r * 1.72, r * 0.40, 0, 0, TAU);
     ctx.stroke();
-    ctx.globalAlpha *= 0.55;
-    ctx.lineWidth = Math.max(1, r * 0.018);
+    ctx.strokeStyle = planet.c1;
+    ctx.globalAlpha *= 1.8;
+    ctx.lineWidth = Math.max(1, r * 0.022);
     ctx.beginPath();
-    ctx.ellipse(0, 0, r * 2.00, r * 0.54, 0, 0, TAU);
+    ctx.ellipse(0, 0, r * 2.00, r * 0.52, 0, 0, TAU);
     ctx.stroke();
     ctx.restore();
   }
 
-  const g = ctx.createRadialGradient(-r * 0.34, -r * 0.40, r * 0.08, 0, 0, r);
-  g.addColorStop(0, planet.c1);
-  g.addColorStop(1, planet.c2);
-  ctx.fillStyle = g;
+  ctx.fillStyle = planet.c1;
+  ctx.strokeStyle = COLORS.ink;
+  ctx.lineWidth = Math.max(1.2, r * 0.032);
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, TAU);
   ctx.fill();
+  ctx.stroke();
 
-  ctx.globalAlpha *= 0.18;
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = Math.max(1, r * 0.035);
-  for (let i = -1; i <= 1; i++) {
-    ctx.beginPath();
-    ctx.arc(0, i * r * 0.23, r * (0.72 - Math.abs(i) * 0.08), 0.12, Math.PI - 0.12);
-    ctx.stroke();
-  }
+  ctx.globalAlpha *= 0.30;
+  ctx.fillStyle = planet.c2;
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.20, r * 0.06, r * 0.68, r * 0.17, -0.16, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(r * 0.12, -r * 0.28, r * 0.46, r * 0.10, 0.18, 0, TAU);
+  ctx.fill();
+
+  ctx.globalAlpha *= 0.55;
+  ctx.strokeStyle = COLORS.paperLight;
+  ctx.lineWidth = Math.max(1, r * 0.018);
+  ctx.beginPath();
+  ctx.arc(-r * 0.18, -r * 0.22, r * 0.52, 3.75, 5.55);
+  ctx.stroke();
   ctx.restore();
 }
 
 function drawWaypoint(stop, screen, selected) {
-  const radius = (selected ? 18 : 12) * screen.scale;
+  const radius = (selected ? 17 : 11) * screen.scale;
   ctx.save();
   ctx.globalAlpha = screen.alpha;
   ctx.translate(screen.x, screen.y);
   ctx.strokeStyle = stop.color;
-  ctx.lineWidth = selected ? 3 : 1.5;
+  ctx.lineWidth = selected ? 3 : 1.6;
   ctx.beginPath();
   ctx.arc(0, 0, radius, 0, TAU);
   ctx.stroke();
   ctx.globalAlpha *= 0.35;
   ctx.beginPath();
-  ctx.arc(0, 0, radius * 1.75, 0, TAU);
+  ctx.arc(0, 0, radius * 1.72, 0, TAU);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-radius * 2.0, 0); ctx.lineTo(radius * 2.0, 0);
+  ctx.moveTo(0, -radius * 2.0); ctx.lineTo(0, radius * 2.0);
   ctx.stroke();
   ctx.restore();
 }
 
 function drawWorldObjects(progress) {
+  const projected = [];
   for (const planet of planets) {
-    const screen = relativeScreen(planet, progress, 1.1);
-    if (screen) drawPlanet(planet, screen);
+    const screen = projectObject(planet, progress, 1.08);
+    if (screen) projected.push({ kind: 'planet', obj: planet, screen });
   }
   for (const stop of stops) {
-    const screen = relativeScreen(stop, progress, 1.0);
-    if (screen) drawWaypoint(stop, screen, activeStop === stop);
+    const screen = projectObject(stop, progress, 1.0);
+    if (screen) projected.push({ kind: 'stop', obj: stop, screen });
+  }
+  projected.sort((a, b) => a.screen.scale - b.screen.scale);
+  for (const item of projected) {
+    if (item.kind === 'planet') drawPlanet(item.obj, item.screen);
+    else drawWaypoint(item.obj, item.screen, activeStop === item.obj);
   }
 }
 
@@ -305,87 +400,115 @@ function drawTrail(points, color, width, alpha) {
 
 function drawOrbitCurl(stop, progress, now) {
   if (!stop) return;
-  const target = relativeScreen(stop, progress, 1.0);
+  const target = projectObject(stop, progress, 1.0);
   if (!target) return;
+  const ship = shipPoint(progress);
+  const phase = now * 0.00115;
 
-  const phase = now * 0.0014;
   ctx.save();
   ctx.strokeStyle = stop.color;
-  ctx.lineWidth = 2.4;
-  ctx.globalAlpha = 0.72;
+  ctx.lineWidth = 2.5;
+  ctx.globalAlpha = 0.76;
   ctx.beginPath();
-  const start = trail[Math.max(0, trail.length - 1)] || routePoint(progress);
-  ctx.moveTo(start.x, start.y);
-  const cx = target.x;
-  const cy = target.y;
-  ctx.bezierCurveTo(start.x + 40, start.y - 30, cx - 52, cy + 18, cx - 24, cy);
-  for (let i = 0; i <= 44; i++) {
-    const a = phase + i / 44 * TAU * 1.55;
-    const rr = 30 - i * 0.38;
-    ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.62);
+  ctx.moveTo(ship.x - 4, ship.y + 18);
+  ctx.bezierCurveTo(ship.x - 44, ship.y + 56, target.x - 54, target.y + 28, target.x - 28, target.y);
+  for (let i = 0; i <= 48; i++) {
+    const a = phase + i / 48 * TAU * 1.65;
+    const rr = 34 - i * 0.42;
+    ctx.lineTo(target.x + Math.cos(a) * rr, target.y + Math.sin(a) * rr * 0.58);
   }
   ctx.stroke();
 
-  ctx.globalAlpha = 0.28;
-  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.30;
+  ctx.lineWidth = 1.1;
   ctx.beginPath();
-  for (let i = 0; i <= 40; i++) {
-    const a = -phase * 0.8 + i / 40 * TAU * 1.35;
-    const rr = 39 - i * 0.45;
-    const x = cx + Math.cos(a) * rr;
-    const y = cy + Math.sin(a) * rr * 0.55;
+  for (let i = 0; i <= 42; i++) {
+    const a = -phase * 0.75 + i / 42 * TAU * 1.4;
+    const rr = 45 - i * 0.54;
+    const x = target.x + Math.cos(a) * rr;
+    const y = target.y + Math.sin(a) * rr * 0.50;
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.stroke();
   ctx.restore();
 }
 
-function drawShip(x, y, angle, speed, now) {
-  const bob = reducedMotion ? 0 : Math.sin(now * 0.003) * 2.4;
-  const bank = clamp(velocity * 0.08, -0.22, 0.22);
+function drawShip(x, y, heading, speed, now) {
+  const bob = reducedMotion ? 0 : Math.sin(now * 0.0025) * 1.8;
+  const bank = clamp(velocity * 0.11 + Math.sin(travel * TAU * 1.45) * 0.10, -0.34, 0.34);
+  const warp = clamp(speed * 5, 0, 1);
+
   ctx.save();
   ctx.translate(x, y + bob);
-  ctx.rotate(angle + Math.PI / 2 + bank);
-  const scale = clamp(0.82 + Math.abs(speed) * 0.012, 0.82, 1.10);
+  ctx.rotate(bank);
+  const scale = clamp(0.92 + speed * 0.020, 0.92, 1.12);
   ctx.scale(scale, scale);
 
-  // soft exhaust
-  ctx.globalAlpha = 0.28 + clamp(Math.abs(speed) * 0.015, 0, 0.48);
-  ctx.fillStyle = '#67d8ff';
-  ctx.beginPath();
-  ctx.moveTo(-9, 31); ctx.quadraticCurveTo(-3, 56, 0, 70); ctx.quadraticCurveTo(3, 56, 9, 31); ctx.closePath(); ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // wings
-  ctx.fillStyle = '#7c8ca8';
-  ctx.strokeStyle = '#dce9ff';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(0, -30); ctx.lineTo(-35, 20); ctx.lineTo(-14, 17); ctx.lineTo(-8, 30); ctx.lineTo(0, 21); ctx.lineTo(8, 30); ctx.lineTo(14, 17); ctx.lineTo(35, 20); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-
-  // hull
-  const g = ctx.createLinearGradient(-12, -28, 12, 31);
-  g.addColorStop(0, '#f2f6ff');
-  g.addColorStop(1, '#687b99');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(0, -36); ctx.quadraticCurveTo(14, -10, 10, 25); ctx.quadraticCurveTo(0, 35, -10, 25); ctx.quadraticCurveTo(-14, -10, 0, -36); ctx.fill();
-
-  // canopy
-  ctx.fillStyle = '#153f67';
-  ctx.beginPath();
-  ctx.ellipse(0, -12, 7.2, 12, 0, 0, TAU); ctx.fill();
-
-  // engine pods
-  ctx.fillStyle = '#172334';
+  // Ink-like exhaust ribbons. They lengthen with scroll speed but stay cheap.
+  ctx.globalAlpha = 0.28 + warp * 0.36;
+  ctx.strokeStyle = COLORS.fox;
+  ctx.lineWidth = 3.0;
+  ctx.lineCap = 'round';
   for (const sx of [-1, 1]) {
     ctx.beginPath();
-    ctx.roundRect(sx * 22 - 4, 9, 8, 25, 4); ctx.fill();
-    ctx.fillStyle = '#73dcff';
-    ctx.fillRect(sx * 22 - 2, 14, 4, 15);
-    ctx.fillStyle = '#172334';
+    ctx.moveTo(sx * 19, 24);
+    ctx.bezierCurveTo(sx * 20, 46, sx * (15 + warp * 9), 64 + warp * 26, sx * (10 + warp * 7), 82 + warp * 34);
+    ctx.stroke();
   }
+  ctx.globalAlpha = 1;
+
+  // Cartoon exploration ship: cream paper hull, dark ink outline, fox-orange accents.
+  ctx.fillStyle = '#f0e6cf';
+  ctx.strokeStyle = COLORS.ink;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -38);
+  ctx.quadraticCurveTo(13, -25, 17, -4);
+  ctx.lineTo(39, 18);
+  ctx.lineTo(18, 16);
+  ctx.lineTo(11, 31);
+  ctx.lineTo(0, 23);
+  ctx.lineTo(-11, 31);
+  ctx.lineTo(-18, 16);
+  ctx.lineTo(-39, 18);
+  ctx.lineTo(-17, -4);
+  ctx.quadraticCurveTo(-13, -25, 0, -38);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = COLORS.rust;
+  ctx.strokeStyle = COLORS.ink;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.ellipse(0, -13, 8, 13, 0, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = COLORS.fox;
+  ctx.beginPath();
+  ctx.moveTo(-30, 13); ctx.lineTo(-13, 3); ctx.lineTo(-16, 17); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(30, 13); ctx.lineTo(13, 3); ctx.lineTo(16, 17); ctx.closePath(); ctx.fill();
+
+  ctx.fillStyle = COLORS.ink;
+  for (const sx of [-1, 1]) {
+    ctx.beginPath();
+    ctx.roundRect(sx * 22 - 3.5, 12, 7, 22, 3.5);
+    ctx.fill();
+    ctx.fillStyle = COLORS.gold;
+    ctx.fillRect(sx * 22 - 1.8, 17, 3.6, 12);
+    ctx.fillStyle = COLORS.ink;
+  }
+
+  // Tiny drafting marks sell the illustrated-paper look.
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = COLORS.blue;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-8, 5); ctx.lineTo(8, 5);
+  ctx.moveTo(-6, 10); ctx.lineTo(6, 10);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -407,7 +530,7 @@ function adaptPerformance(dt, now) {
 
   if (frameEmaMs > 30 && renderScale <= 0.64 && !degraded) {
     degraded = true;
-    rebuildStars();
+    rebuildBackdrop();
   }
 }
 
@@ -436,20 +559,21 @@ function animate(now) {
   activeStop = settled ? nearestStop(progress) : null;
   trailMode = activeStop ? 'orbit' : 'follow';
 
-  const ship = routePoint(progress);
-  const tangent = routeTangent(progress);
-  trail.push({ x: ship.x, y: ship.y });
-  trailGhost.push({ x: ship.x + Math.sin(now * 0.004) * 3.5, y: ship.y + 5 });
-  if (trail.length > 54) trail.shift();
-  if (trailGhost.length > 48) trailGhost.shift();
+  const ship = shipPoint(progress);
+  const heading = shipHeading(progress);
+  trail.push({ x: ship.x, y: ship.y + 20 });
+  trailGhost.push({ x: ship.x + Math.sin(now * 0.0035) * 3.0, y: ship.y + 27 });
+  if (trail.length > 52) trail.shift();
+  if (trailGhost.length > 46) trailGhost.shift();
 
   clearBackground(progress);
+  drawPerspectiveGuide(progress);
   drawStars(progress, now);
   drawWorldObjects(progress);
-  drawTrail(trailGhost, '#8c72ff', 1.1, 0.20);
-  drawTrail(trail, '#72dfff', 2.2, 0.66);
+  drawTrail(trailGhost, COLORS.olive, 1.0, 0.20);
+  drawTrail(trail, COLORS.fox, 2.3, 0.64);
   if (activeStop) drawOrbitCurl(activeStop, progress, now);
-  drawShip(ship.x, ship.y, tangent, Math.abs(velocity), now);
+  drawShip(ship.x, ship.y, heading, Math.abs(velocity), now);
 
   if (now % 100 < 17) {
     velocityEl.textContent = (Math.abs(velocity) * 100).toFixed(1);
@@ -472,6 +596,8 @@ function animate(now) {
     frameEmaMs,
     degraded,
     engine: 'canvas-2d',
+    movement: 'forward-chase-perspective',
+    palette: 'fox-paper-earth',
   };
 
   requestAnimationFrame(animate);
