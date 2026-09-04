@@ -33,6 +33,17 @@
       height: 100%;
       display: block;
       background: var(--paper);
+      z-index: 1;
+    }
+    #ship3d {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: transparent;
+      pointer-events: none;
+      z-index: 2;
     }
     #hud {
       position: fixed;
@@ -152,6 +163,7 @@
 </head>
 <body>
   <canvas id="world" aria-label="Illustrated forward-flight portfolio journey"></canvas>
+  <canvas id="ship3d" aria-label="3D ship following the illustrated flight path"></canvas>
 
   <div id="hud" aria-hidden="true">
     <div class="hud-top">
@@ -178,6 +190,14 @@
     </div>
   </div>
 
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
   <script type="module" src="./src/canvas-flight.js"></script>
+  <script type="module" src="./src/ship-overlay.js"></script>
 </body>
 </html>
