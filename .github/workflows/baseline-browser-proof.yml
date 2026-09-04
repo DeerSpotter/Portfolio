@@ -1,9 +1,9 @@
-name: Canvas Portfolio Browser Proof
+name: Baseline Browser Proof
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/canvas-portfolio-flight
+      - main
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Check out exact branch head
+      - name: Check out exact revision
         uses: actions/checkout@v4
 
       - name: Set up Node
@@ -37,45 +37,38 @@ jobs:
           echo $! > /tmp/portfolio-http.pid
           sleep 2
 
-      - name: Run canvas flight proof and capture real diagnostic
+      - name: Run baseline browser proof and capture diagnostic
         id: browser_test
         shell: bash
         run: |
           set +e
-          node verify-canvas.mjs > canvas-diagnostic.txt 2>&1
+          node verify-canvas.mjs > baseline-diagnostic.txt 2>&1
           status=$?
           set -e
           echo "status=$status" >> "$GITHUB_OUTPUT"
-          cat canvas-diagnostic.txt
+          cat baseline-diagnostic.txt
           exit 0
 
       - name: Publish or update PR diagnostic
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
           TEST_STATUS: ${{ steps.browser_test.outputs.status }}
         with:
           script: |
             const fs = require('fs');
-            const marker = '<!-- canvas-portfolio-ci -->';
+            const marker = '<!-- portfolio-baseline-ci -->';
             const status = process.env.TEST_STATUS || 'unknown';
             let diagnostic = 'Diagnostic file was not produced.';
-            if (fs.existsSync('canvas-diagnostic.txt')) {
-              diagnostic = fs.readFileSync('canvas-diagnostic.txt', 'utf8').trim();
+            if (fs.existsSync('baseline-diagnostic.txt')) {
+              diagnostic = fs.readFileSync('baseline-diagnostic.txt', 'utf8').trim();
             }
             if (diagnostic.length > 12000) diagnostic = diagnostic.slice(-12000);
 
             const { owner, repo } = context.repo;
-            const head = `${owner}:feature/canvas-portfolio-flight`;
-            const prs = await github.rest.pulls.list({ owner, repo, state: 'open', head });
-            if (!prs.data.length) {
-              core.warning(`No open PR found for ${head}; diagnostic remains in the workflow log.`);
-              return;
-            }
-
-            const issue_number = prs.data[0].number;
+            const issue_number = context.issue.number;
             const outcome = status === '0' ? 'PASS' : 'FAIL';
-            const body = `${marker}\n## Canvas portfolio browser proof: ${outcome}\n\nCommit: \`${context.sha}\`\n\n\`\`\`text\n${diagnostic}\n\`\`\``;
+            const body = `${marker}\n## Portfolio baseline browser proof: ${outcome}\n\nCommit: \`${context.sha}\`\n\n\`\`\`text\n${diagnostic}\n\`\`\``;
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
             const existing = comments.data.find(comment => comment.body && comment.body.includes(marker));
             if (existing) {
@@ -91,8 +84,8 @@ jobs:
           TEST_STATUS: ${{ steps.browser_test.outputs.status }}
         run: |
           if [ "${TEST_STATUS:-1}" != "0" ]; then
-            echo "Canvas browser proof failed. Diagnostic was published to the PR conversation."
-            cat canvas-diagnostic.txt || true
+            echo "Baseline browser proof failed."
+            cat baseline-diagnostic.txt || true
             exit "${TEST_STATUS:-1}"
           fi
-          echo "Canvas browser proof passed."
+          echo "Baseline browser proof passed."

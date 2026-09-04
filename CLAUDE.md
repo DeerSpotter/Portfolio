@@ -1,44 +1,45 @@
-# Portfolio — live 3D flight branch
+# Portfolio baseline
 
-This branch is a ground-up replacement of the previous hand-painted cartographer map. The new direction is a scroll-driven, third-person 3D portfolio journey.
+This repository now uses a hybrid portfolio architecture. Treat it as the production baseline.
 
-## Current objective
+## Baseline
 
-Prove the flight system before migrating portfolio content.
+- `index.html` is the page shell and HUD.
+- `src/canvas-flight.js` renders the illustrated 2D / 2.5D parchment world, planets, rings, perspective motion, waypoints, trails, and seamless scroll loop.
+- `src/ship-overlay.js` renders only the 3D ship and chase camera over the canvas.
+- `src/ship-stub.js` is the documented procedural ship model currently used by the baseline.
+- `verify-canvas.mjs` is the browser regression proof.
+- `.github/workflows/pages.yml` deploys `main` to GitHub Pages.
+- `.github/workflows/baseline-browser-proof.yml` validates the baseline in CI.
 
-The current implementation must stay deterministic from native scroll position:
+## Locked direction
 
-```text
-browser scroll position
-        -> target timeline progress
-        -> damped actual progress
-        -> 3D route position/tangent
-        -> ship yaw/pitch/roll
-        -> chase camera
-        -> warp intensity from scroll velocity
-```
+Do not restore the previous full-3D world or the old cartographer/fox-template implementation unless explicitly requested.
 
-Do not turn this into a timer-driven one-way animation. Forward and reverse scrolling must reconstruct the same world state.
-
-## Files
+The intended experience is:
 
 ```text
-index.html                  page shell, HUD, native scroll surface
-src/live3d.js               Three.js world, route, camera and flight controller
-src/ship-stub.js            documented temporary procedural ship asset
-docs/LIVE3D_PROTOTYPE.md    prototype contract and final GLB requirements
-verify.mjs                  headless regression proof
+HTML portfolio content / HUD
+            ↓
+transparent Three.js ship layer
+            ↓
+illustrated Canvas 2D / 2.5D world
+            ↓
+native browser scroll
 ```
 
-## Ship stub rule
+The ship keeps the original third-person chase flight language: perspective camera behind and above the ship, forward travel, yaw, pitch, expressive banking, warp response, look-ahead, and forward/reverse looping.
 
-The procedural ship is a documented stub. It exists only to develop movement before the final GLB asset is selected. Do not quietly evolve it into the final production asset. Replace the stub module cleanly when the real ship arrives.
+The environment stays lightweight and illustrated. Do not reintroduce 3D stars, nebulae, gates, moons, asteroids, obstacle fields, ribbons, or 3D warp geometry as background content.
 
 ## Engineering rules
 
+- Keep scroll position deterministic as the timeline source of truth.
+- Preserve forward and reverse navigation.
 - No monkey patching.
-- Do not suppress runtime, build, or test errors.
-- Replace superseded implementations instead of hiding them behind dead branches in runtime code.
-- Keep camera motion calmer than ship motion so aggressive banking does not destroy readability.
-- Keep the live experience static-host compatible with GitHub Pages.
-- If an external runtime dependency remains during prototyping, document it explicitly and provide a plan to vendor or bundle it before production.
+- Do not suppress runtime, build, test, or deployment failures.
+- Replace superseded implementations cleanly instead of leaving dead runtime code.
+- Keep the critical path compatible with static GitHub Pages hosting.
+- Keep camera motion readable even when ship banking is expressive.
+- Keep the background cheaper than the ship layer so slower computers remain usable.
+- If an external runtime dependency remains, document it and prefer vendoring or reproducible bundling before final production hardening.

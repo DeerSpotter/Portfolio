@@ -21,11 +21,34 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Check out site
         uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install browser test dependency
+        run: |
+          npm init -y
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start static site
+        run: |
+          python3 -m http.server 8231 > /tmp/portfolio-http.log 2>&1 &
+          echo $! > /tmp/portfolio-http.pid
+          sleep 2
+
+      - name: Verify production baseline before deploy
+        shell: bash
+        run: |
+          set -o pipefail
+          node verify-canvas.mjs 2>&1 | tee baseline-diagnostic.txt
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
