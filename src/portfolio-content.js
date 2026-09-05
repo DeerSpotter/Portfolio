@@ -92,7 +92,7 @@ export const waypoints = [
       {
         kicker: '02 / Epirus · Design Lead',
         heading: 'A concept has to survive contact with detail.',
-        body: 'I served as Design Lead on Epirus for approximately five months, using SolidWorks to lead concept and detailed design until a leadership directed stop work order paused the effort.',
+        body: 'I served as Design Lead on Epirus for approximately five months, using SolidWorks to lead concept and detailed design until the effort was paused by leadership.',
         proof: 'Leadership meant carrying intent from the first arrangement into the details where fit, interfaces, manufacturing, and change begin to compete.',
         visual: { type: 'trace', items: [
           { title: 'Concept', detail: 'Establish intent' },
