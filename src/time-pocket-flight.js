@@ -6,8 +6,8 @@ const COAST_RATE_FAR = 12;
 const COAST_RATE_NEAR = 4.5;
 const TIME_FIELD_RADIUS = 0.085;
 const LOOP_EDGE_GUARD_PX = 18;
-const LOCK_RELEASE_DISTANCE = 0.072;
-const LOCK_ACQUIRE_DISTANCE = 0.10;
+const FLIGHT_LOCK_RELEASE_DISTANCE = 0.010;
+const TIME_POCKET_LOCK_RELEASE_DISTANCE = 0.072;
 
 let lastUserInputTime = performance.now();
 let lastTime = performance.now();
@@ -38,11 +38,8 @@ function smoothstep(value) {
   return t * t * (3 - 2 * t);
 }
 
-function nearestStop(progress) {
-  return waypoints.reduce((best, stop) => {
-    const distance = Math.abs(wrapSigned(stop.at - progress));
-    return !best || distance < best.distance ? { stop, distance } : best;
-  }, null);
+function stopByTitle(title) {
+  return title ? waypoints.find(stop => stop.title === title) || null : null;
 }
 
 function noteUserInput() {
@@ -64,19 +61,32 @@ addEventListener('pointerdown', event => {
   if (!event.target.closest('.detail, dialog, a, button')) noteUserInput();
 }, { passive: true });
 
-function updateLock(progress) {
-  const nearest = nearestStop(progress);
-  if (!lockedStop && nearest.distance <= LOCK_ACQUIRE_DISTANCE) lockedStop = nearest.stop;
-  if (!lockedStop) return;
+function updateLock(progress, activeTitle) {
+  const acquiredStop = stopByTitle(activeTitle);
 
-  const lockedDistance = Math.abs(wrapSigned(lockedStop.at - progress));
-  const passed = wrapSigned(lockedStop.at - progress) < -LOCK_RELEASE_DISTANCE;
-  const deliberateJump = nearest.stop !== lockedStop
-    && nearest.distance < 0.025
-    && lockedDistance > 0.105;
+  // A stop only becomes a shared time-pocket latch after the canvas has
+  // actually acquired it. During ordinary flight the billboard is free to
+  // show the next stop in the distance instead of inheriting a stale nearest
+  // stop simply because that stop is still geometrically close behind us.
+  if (!lockedStop) {
+    if (acquiredStop) lockedStop = acquiredStop;
+    return;
+  }
 
-  if (passed || lockedDistance > 0.16 || deliberateJump) {
-    lockedStop = nearest.distance <= LOCK_ACQUIRE_DISTANCE ? nearest.stop : null;
+  if (acquiredStop && acquiredStop !== lockedStop) {
+    lockedStop = acquiredStop;
+    return;
+  }
+
+  const relativeDistance = wrapSigned(lockedStop.at - progress);
+  const lockedDistance = Math.abs(relativeDistance);
+  const releaseDistance = mode === 'time-pocket'
+    ? TIME_POCKET_LOCK_RELEASE_DISTANCE
+    : FLIGHT_LOCK_RELEASE_DISTANCE;
+  const passed = relativeDistance < -releaseDistance;
+
+  if (passed || lockedDistance > 0.16) {
+    lockedStop = acquiredStop || null;
   }
 }
 
@@ -126,7 +136,7 @@ function animate(now) {
     return;
   }
 
-  updateLock(flight.progress);
+  updateLock(flight.progress, flight.activeStop);
   const field = fieldFor(flight.progress);
   const idleFor = now - lastUserInputTime;
   const loopEdge = nearLoopEdge();
@@ -165,6 +175,8 @@ function animate(now) {
     coastRateFar: COAST_RATE_FAR,
     coastRateNear: COAST_RATE_NEAR,
     timeFieldRadius: TIME_FIELD_RADIUS,
+    flightLockReleaseDistance: FLIGHT_LOCK_RELEASE_DISTANCE,
+    timePocketLockReleaseDistance: TIME_POCKET_LOCK_RELEASE_DISTANCE,
     contract: 'cinematic-time-dilation-pass-v2',
   };
 
