@@ -64,11 +64,15 @@ function project(stop, progress) {
   const rel = wrapSigned(stop.at - progress);
   const vp = vanishingPoint(progress);
   const side = billboardSide(stop);
-  const t = clamp((0.34 - rel) / 0.395, 0, 1);
+
+  // The stops are relatively close together, so the depth curve deliberately
+  // compresses the final approach. A newly handed-off billboard starts tiny
+  // near the vanishing point instead of appearing already half grown.
+  const t = clamp((0.20 - rel) / 0.255, 0, 1);
   const pass = rel < 0 ? Math.pow(clamp(-rel / 0.055, 0, 1), 1.12) : 0;
 
-  const lateralPerspective = 0.055 + Math.pow(t, 1.50) * 1.34;
-  const forwardPerspective = 0.060 + Math.pow(t, 1.72) * 1.16;
+  const lateralPerspective = 0.045 + Math.pow(t, 1.52) * 1.30;
+  const forwardPerspective = 0.050 + Math.pow(t, 1.74) * 1.14;
   const laneX = innerWidth * (0.50 + side * 0.47);
   const laneY = innerHeight * 0.49;
 
@@ -79,16 +83,16 @@ function project(stop, progress) {
     + (laneY - vp.y) * forwardPerspective
     + innerHeight * 0.16 * pass;
 
-  const scale = 0.13 + Math.pow(t, 1.42) * 0.92 + pass * 0.18;
-  const alpha = clamp(0.13 + t * 1.12 - pass * 0.40, 0.08, 1);
+  const scale = 0.12 + Math.pow(t, 1.44) * 1.10 + pass * 0.18;
+  const alpha = clamp(0.10 + t * 1.18 - pass * 0.40, 0.07, 1);
 
   // The plane is skewed toward the flight corridor. Far away it presents a
   // stronger angle; close up it opens toward the camera, then kicks outward
   // as the ship passes it.
-  const yaw = side * (-34 + t * 15 - pass * 19);
-  const roll = side * (4.8 - t * 2.2 + pass * 5.5)
+  const yaw = side * (-36 + t * 25 - pass * 20);
+  const roll = side * (5.2 - t * 2.6 + pass * 5.8)
     + Math.sin(progress * TAU * 1.35) * 0.8;
-  const skew = side * (-5.5 + t * 2.8);
+  const skew = side * (-6.0 + t * 3.4);
 
   let state = 'distant';
   if (rel < -0.015) state = 'passing';
