@@ -5,7 +5,7 @@ export const destinationBriefings = {
     {
       kicker: '01 / Mission premise',
       heading: 'AI gives me velocity. Experience gives it a bearing.',
-      body: 'I learned engineering where a change leaves the screen and becomes hardware, configuration, cost, and consequence. I bring that same judgment into software built with AI.',
+      body: 'I learned engineering where a change leaves the screen and becomes hardware, configuration, cost, and consequence. I bring that same insight into software built with AI.',
       proof: 'Speed matters only when it is pointed at the right problem.',
       visual: { type: 'trace', items: [
         { title: 'Problem', detail: 'Find the real friction' },
@@ -40,7 +40,7 @@ export const destinationBriefings = {
     {
       kicker: '04 / Hiring signal',
       heading: 'Bring me the problem nobody wants to inherit.',
-      body: 'The tangled workflow, the brittle interface, the tool everyone works around. Those are the places where engineering judgment and AI acceleration compound instead of merely adding.',
+      body: 'The tangled workflow, the brittle interface, the tool everyone works around. Those are the places where engineering insight and AI acceleration compound instead of merely adding.',
       proof: 'I am most useful where the system is complicated, the consequences are real, and the answer still has to feel simple to the person using it.',
       visual: { type: 'matrix', items: [
         { title: 'Root cause', detail: 'Trace the failure to its boundary' },
@@ -104,12 +104,12 @@ export const destinationBriefings = {
       kicker: '01 / Workflow automation',
       heading: 'Repetition is a signal from the system.',
       body: 'When engineers repeatedly search drawings, revisions, and change records to reconstruct the same history, the workflow is asking to be redesigned.',
-      proof: 'Automation begins by recognizing where human attention is being spent on retrieval instead of judgment.',
+      proof: 'Automation begins by recognizing where human attention is being spent on retrieval instead of insight.',
       visual: { type: 'trace', items: [
         { title: 'Search', detail: 'Find the record' },
         { title: 'Rebuild', detail: 'Reconstruct history' },
         { title: 'Review', detail: 'Understand the change' },
-        { title: 'Decide', detail: 'Use engineering judgment' },
+        { title: 'Decide', detail: 'Use engineering insight' },
       ] },
     },
     {
@@ -137,7 +137,7 @@ export const destinationBriefings = {
     },
     {
       kicker: '04 / Outcome',
-      heading: 'The best automation leaves more room for judgment.',
+      heading: 'The best automation leaves more room for insight.',
       body: 'Good tooling removes the mechanical search, preserves the evidence, and gives the reviewer a clean path through the information without hiding the underlying record.',
       proof: 'Less hunting. Better context. A clearer decision surface.',
       visual: { type: 'matrix', items: [
