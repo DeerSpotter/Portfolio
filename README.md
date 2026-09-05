@@ -192,3 +192,15 @@ separately. Wheel/keyboard travel over waypoint controls releases the anchor,
 and real user input bypasses the synthetic-scroll guard. This corrects the
 slow-pass timeout at `verify-time-pocket-browser.mjs:124` without changing its
 assertion or timeout. No local tests were run.
+
+## Full-page blueprint arrivals
+
+The arrival canvas again fills the viewport behind the whole page and remains
+there while project content scrolls. The corner viewport is replaced, and the
+robot-arm module is replaced by `destination-blueprint.js`: seeded mechanical
+linework with involute-style gear outlines, pitch circles, bearing races, bolt
+patterns, section hatching, exploded coaxial drawings and dimension leaders.
+Each destination has a different assembly composition. These are abstract
+technical illustrations, not manufacturing drawings. Original planetary and
+facility scenery remains behind the blueprint layer, with readable translucent
+content surfaces. No local tests were run for this change.
