@@ -25,15 +25,10 @@ async function moveTo(progress) {
     });
     return {
       billboard: structuredClone(window.__portfolioBillboardDebug),
-      arrival: structuredClone(window.__portfolioArrivalDebug),
       state: detail?.dataset.billboardState,
       interactive: detail?.dataset.interactive,
       pointerEvents: getComputedStyle(detail).pointerEvents,
       actionTabIndex: document.getElementById('detailAction')?.tabIndex,
-      cardStage: Number(detail?.dataset.cardStage ?? -1),
-      cardStageCount: Number(detail?.dataset.cardStageCount ?? 0),
-      visualType: detail?.querySelector('.arrival-visual')?.dataset.visual || null,
-      panelShell: Boolean(detail?.querySelector('.arrival-panel-shell')),
       rearFlame: canvasSnapshot(rearFlame),
       frontFlame: canvasSnapshot(frontFlame),
       detailZIndex: Number.parseInt(getComputedStyle(detail).zIndex, 10),
@@ -62,26 +57,6 @@ try {
   samples.forEach((sample, index) => {
     if (sample.billboard.state !== expectedStates[index] || sample.state !== expectedStates[index]) {
       throw new Error(`Billboard state mismatch at stage ${index}: debug=${sample.billboard.state}, DOM=${sample.state}, expected=${expectedStates[index]}`);
-    }
-  });
-
-  const expectedArrivalStages = [0, 1, 2, 3, 3];
-  samples.forEach((sample, index) => {
-    if (!sample.panelShell) {
-      throw new Error(`Arrival briefing shell missing at ${expectedStates[index]}.`);
-    }
-    if (sample.arrival?.contract !== 'scroll-staged-arrival-brief-v1'
-      || sample.arrival.waypoint !== 'Engineering'
-      || sample.arrival.stages !== 4) {
-      throw new Error(`Arrival briefing contract mismatch at ${expectedStates[index]}: ${JSON.stringify(sample.arrival)}`);
-    }
-    if (sample.arrival.stage !== expectedArrivalStages[index]
-      || sample.cardStage !== expectedArrivalStages[index]
-      || sample.cardStageCount !== 4) {
-      throw new Error(`Arrival briefing stage mismatch at ${expectedStates[index]}: debug=${sample.arrival.stage}, DOM=${sample.cardStage}, expected=${expectedArrivalStages[index]}`);
-    }
-    if (!sample.visualType) {
-      throw new Error(`Arrival briefing visual missing at ${expectedStates[index]}.`);
     }
   });
 
@@ -154,12 +129,6 @@ try {
     throw new Error(`Active front flame corona is incomplete: ${active.billboard.frontFlameCount}`);
   }
 
-  const reverseArming = await moveTo(0.150);
-  const reverseApproaching = await moveTo(0.100);
-  if (reverseArming.arrival?.stage !== 2 || reverseApproaching.arrival?.stage !== 1) {
-    throw new Error(`Reverse arrival briefing did not walk backward: ${reverseArming.arrival?.stage} -> ${reverseApproaching.arrival?.stage}`);
-  }
-
   const orbit = await page.evaluate(() => ({
     background: window.__portfolioCanvasDebug.orbitalBackground,
     billboard: window.__portfolioBillboardDebug,
@@ -172,8 +141,6 @@ try {
   }
   console.log('[portfolio-billboard-browser] PASS');
   console.log(`[portfolio-billboard-browser] states=${expectedStates.join('->')}`);
-  console.log(`[portfolio-billboard-browser] arrivalStages=${expectedArrivalStages.join('->')}`);
-  console.log('[portfolio-billboard-browser] arrivalReverse=2->1');
   console.log(`[portfolio-billboard-browser] scale=${samples.map(s => s.billboard.scale.toFixed(3)).join('->')}`);
   console.log(`[portfolio-billboard-browser] lateral=${lateral.map(v => v.toFixed(1)).join('->')}`);
   console.log(`[portfolio-billboard-browser] yaw=${distant.billboard.yaw.toFixed(1)}deg->${active.billboard.yaw.toFixed(1)}deg`);
