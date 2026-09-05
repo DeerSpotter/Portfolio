@@ -1,13 +1,25 @@
 const TAU = Math.PI * 2;
-const FLAME_CONTRACT = 'canvas2d-industrial-edge-flame-v3';
-const MAX_REAR_PARTICLES = 58;
-const MAX_FRONT_PARTICLES = 34;
+const FLAME_CONTRACT = 'canvas2d-anchored-flame-corona-v5';
 
 const INDUSTRIAL_PALETTES = [
-  { outer: [47, 42, 35], core: [184, 92, 46], ember: [128, 52, 34] },
-  { outer: [38, 40, 34], core: [101, 112, 61], ember: [164, 92, 42] },
-  { outer: [57, 44, 34], core: [198, 111, 46], ember: [139, 56, 37] },
-  { outer: [43, 43, 40], core: [126, 119, 96], ember: [156, 70, 39] },
+  { outline: [52, 35, 24], outer: [126, 54, 32], mid: [196, 88, 38], core: [232, 132, 49], accent: [103, 112, 55] },
+  { outline: [42, 39, 27], outer: [96, 93, 46], mid: [177, 77, 35], core: [224, 119, 43], accent: [139, 48, 34] },
+  { outline: [58, 39, 25], outer: [151, 61, 31], mid: [207, 96, 38], core: [238, 145, 54], accent: [113, 118, 58] },
+  { outline: [47, 42, 30], outer: [111, 103, 49], mid: [183, 71, 34], core: [218, 112, 42], accent: [151, 51, 35] },
+];
+
+const REAR_ANCHORS = [
+  ['left', .10, 1.10, 0], ['left', .28, .88, 1], ['left', .46, 1.16, 2], ['left', .66, .94, 3], ['left', .85, 1.08, 1],
+  ['right', .08, 1.04, 2], ['right', .26, .92, 0], ['right', .45, 1.18, 3], ['right', .64, .90, 1], ['right', .84, 1.12, 2],
+  ['top', .18, .82, 1], ['top', .42, 1.02, 3], ['top', .68, .88, 0], ['top', .86, .76, 2],
+  ['bottom', .14, .80, 2], ['bottom', .38, 1.00, 0], ['bottom', .62, .86, 3], ['bottom', .84, .76, 1],
+];
+
+const FRONT_ANCHORS = [
+  ['left', .18, .82, 2], ['left', .48, 1.00, 0], ['left', .76, .78, 1],
+  ['right', .16, .80, 1], ['right', .44, 1.04, 2], ['right', .74, .82, 3],
+  ['top', .34, .72, 0], ['top', .72, .68, 2],
+  ['bottom', .26, .72, 3], ['bottom', .68, .70, 1],
 ];
 
 function clamp(value, min, max) {
@@ -20,38 +32,24 @@ function rotatePoint(x, y, angle) {
   return { x: x * c - y * s, y: x * s + y * c };
 }
 
+function normalize(x, y) {
+  const m = Math.max(0.0001, Math.hypot(x, y));
+  return { x: x / m, y: y / m };
+}
+
+function rgba(rgb, alpha) {
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
+
 function stateStrength(state, timeFieldStrength) {
   const base = {
-    distant: 0.02,
-    approaching: 0.20,
-    arming: 0.54,
-    active: 0.90,
-    passing: 0.40,
-  }[state] ?? 0.03;
-  const boost = state === 'active' ? timeFieldStrength * 0.08 : 0;
-  return clamp(base + boost, 0.02, 1);
-}
-
-function rearEmissionRate(state, strength) {
-  const base = {
-    distant: 1,
-    approaching: 6,
-    arming: 17,
-    active: 28,
-    passing: 13,
-  }[state] ?? 1;
-  return base * (0.74 + strength * 0.48);
-}
-
-function frontEmissionRate(state, strength) {
-  const base = {
     distant: 0,
-    approaching: 1.5,
-    arming: 10,
-    active: 18,
-    passing: 6,
+    approaching: 0.20,
+    arming: 0.58,
+    active: 0.96,
+    passing: 0.44,
   }[state] ?? 0;
-  return base * (0.70 + strength * 0.50);
+  return clamp(base + (state === 'active' ? timeFieldStrength * 0.04 : 0), 0, 1);
 }
 
 function makeCanvas(className, zIndex) {
@@ -76,34 +74,21 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
 
   const rearCtx = rearCanvas.getContext('2d', { alpha: true, desynchronized: true });
   const frontCtx = frontCanvas.getContext('2d', { alpha: true, desynchronized: true });
-  const rearParticles = [];
-  const frontParticles = [];
-
   let dpr = 1;
   let width = 0;
   let height = 0;
   let lastTime = performance.now();
-  let rearCarry = 0;
-  let frontCarry = 0;
-  let lastStopTitle = '';
-  let lastCenter = null;
+  let phaseTime = 0;
 
   function resize() {
     width = Math.max(1, innerWidth);
     height = Math.max(1, innerHeight);
-    dpr = Math.min(1.35, Math.max(0.8, devicePixelRatio || 1));
+    dpr = Math.min(1.45, Math.max(0.8, devicePixelRatio || 1));
     for (const [canvas, ctx] of [[rearCanvas, rearCtx], [frontCanvas, frontCtx]]) {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
-  }
-
-  function clearParticles() {
-    rearParticles.length = 0;
-    frontParticles.length = 0;
-    rearCarry = 0;
-    frontCarry = 0;
   }
 
   function cardGeometry(screen) {
@@ -113,48 +98,49 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
       scale,
       halfW: Math.max(34, billboard.offsetWidth * scale * 0.51 * yawCompression),
       halfH: Math.max(28, billboard.offsetHeight * scale * 0.51),
+      roll: screen.roll * Math.PI / 180,
     };
   }
 
-  function edgeAnchor(screen, layer) {
-    const { scale, halfW, halfH } = cardGeometry(screen);
-    const edge = Math.floor(Math.random() * 8);
+  function anchorGeometry(screen, anchor, front) {
+    const [edge, position] = anchor;
+    const { scale, halfW, halfH, roll } = cardGeometry(screen);
+    const inside = front ? (8 + 8 * scale) : -2;
     let ox = 0;
     let oy = 0;
-    let normalX = 0;
-    let normalY = 0;
-    let tangentX = 0;
-    let tangentY = 0;
+    let nx = 0;
+    let ny = 0;
+    let tx = 0;
+    let ty = 0;
 
-    if (edge <= 2) {
-      ox = -halfW + (layer === 'front' ? 2 : -7) * scale;
-      oy = (Math.random() * 1.72 - 0.86) * halfH;
-      normalX = -1;
-      tangentY = 1;
-    } else if (edge <= 5) {
-      ox = halfW + (layer === 'front' ? -2 : 7) * scale;
-      oy = (Math.random() * 1.72 - 0.86) * halfH;
-      normalX = 1;
-      tangentY = -1;
-    } else if (edge === 6) {
-      ox = (Math.random() * 1.42 - 0.71) * halfW;
-      oy = -halfH + (layer === 'front' ? 2 : -6) * scale;
-      normalY = -1;
-      tangentX = 1;
+    if (edge === 'left') {
+      ox = -halfW + inside;
+      oy = -halfH + halfH * 2 * position;
+      nx = -1;
+      ty = 1;
+    } else if (edge === 'right') {
+      ox = halfW - inside;
+      oy = -halfH + halfH * 2 * position;
+      nx = 1;
+      ty = -1;
+    } else if (edge === 'top') {
+      ox = -halfW + halfW * 2 * position;
+      oy = -halfH + inside;
+      ny = -1;
+      tx = 1;
     } else {
-      ox = (Math.random() * 1.42 - 0.71) * halfW;
-      oy = halfH + (layer === 'front' ? -2 : 6) * scale;
-      normalY = 1;
-      tangentX = -1;
+      ox = -halfW + halfW * 2 * position;
+      oy = halfH - inside;
+      ny = 1;
+      tx = -1;
     }
 
-    const angle = screen.roll * Math.PI / 180;
-    const rotated = rotatePoint(ox, oy, angle);
-    const normal = rotatePoint(normalX, normalY, angle);
-    const tangent = rotatePoint(tangentX, tangentY, angle);
+    const p = rotatePoint(ox, oy, roll);
+    const normal = rotatePoint(nx, ny, roll);
+    const tangent = rotatePoint(tx, ty, roll);
     return {
-      x: screen.x + rotated.x,
-      y: screen.y + rotated.y,
+      x: screen.x + p.x,
+      y: screen.y + p.y,
       nx: normal.x,
       ny: normal.y,
       tx: tangent.x,
@@ -163,258 +149,181 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
     };
   }
 
-  function spawn(screen, projected, vanishingPoint, strength, layer) {
-    const target = layer === 'front' ? frontParticles : rearParticles;
-    const max = layer === 'front' ? MAX_FRONT_PARTICLES : MAX_REAR_PARTICLES;
-    if (target.length >= max) return;
+  function flamePath(ctx, baseX, baseY, tipX, tipY, nx, ny, widthNow, bend) {
+    const axis = normalize(tipX - baseX, tipY - baseY);
+    const length = Math.max(1, Math.hypot(tipX - baseX, tipY - baseY));
+    const w = Math.max(1.5, widthNow);
 
-    const anchor = edgeAnchor(screen, layer);
-    let flightX = vanishingPoint.x - screen.x;
-    let flightY = vanishingPoint.y - screen.y;
-    const flightMagnitude = Math.max(1, Math.hypot(flightX, flightY));
-    flightX /= flightMagnitude;
-    flightY /= flightMagnitude;
+    const leftBaseX = baseX + nx * w * .86;
+    const leftBaseY = baseY + ny * w * .86;
+    const rightBaseX = baseX - nx * w * .78;
+    const rightBaseY = baseY - ny * w * .78;
 
-    const palette = INDUSTRIAL_PALETTES[Math.floor(Math.random() * INDUSTRIAL_PALETTES.length)];
-    const sideNoise = (Math.random() - 0.5);
-    const front = layer === 'front';
-    const speed = front
-      ? 28 + strength * 36 + Math.random() * 16
-      : 32 + strength * 45 + Math.random() * 22;
-    const tangentBias = sideNoise * (front ? 42 : 26);
-    const flightBias = front ? 0.36 : 0.88;
-    const outwardBias = front ? 13 + strength * 13 : 6 + strength * 8;
-    const lift = front ? 16 + strength * 18 : 8 + strength * 12;
+    const leftShoulderX = baseX + axis.x * length * .24 + nx * (w * 1.10 + bend * .14);
+    const leftShoulderY = baseY + axis.y * length * .24 + ny * (w * 1.10 + bend * .14);
+    const leftNeckX = baseX + axis.x * length * .70 + nx * (w * .28 + bend);
+    const leftNeckY = baseY + axis.y * length * .70 + ny * (w * .28 + bend);
 
-    target.push({
-      layer,
-      x: anchor.x,
-      y: anchor.y,
-      vx: flightX * speed * flightBias + anchor.tx * tangentBias + anchor.nx * outwardBias,
-      vy: flightY * speed * flightBias + anchor.ty * tangentBias + anchor.ny * outwardBias - lift,
-      nx: anchor.nx,
-      ny: anchor.ny,
-      tangentX: anchor.tx,
-      tangentY: anchor.ty,
-      age: 0,
-      life: front
-        ? 0.48 + Math.random() * 0.58 + strength * 0.16
-        : 1.00 + Math.random() * 1.08 + strength * 0.28,
-      width: (front ? 8 : 7) + Math.random() * (front ? 12 : 10),
-      length: (front ? 27 : 34) + Math.random() * (front ? 35 : 45),
-      scale: anchor.scale,
-      phase: Math.random() * TAU,
-      frequency: 3.0 + Math.random() * 3.4,
-      curl: (front ? 28 : 19) + Math.random() * (front ? 38 : 28),
-      alpha: front
-        ? 0.22 + strength * 0.28 + Math.random() * 0.08
-        : 0.12 + strength * 0.19 + Math.random() * 0.06,
-      palette,
-    });
-  }
-
-  function updateParticle(particle, dt, motionScale) {
-    particle.age += dt;
-    const t = clamp(particle.age / particle.life, 0, 1);
-    const curl = Math.sin(particle.phase + particle.age * particle.frequency) * particle.curl;
-    particle.vx += particle.tangentX * curl * dt;
-    particle.vy += particle.tangentY * curl * dt - (particle.layer === 'front' ? 5.0 : 2.4) * dt;
-    const damping = particle.layer === 'front' ? 0.975 : 0.985;
-    particle.vx *= Math.pow(damping, dt * 60);
-    particle.vy *= Math.pow(damping + 0.004, dt * 60);
-    particle.x += particle.vx * dt * motionScale;
-    particle.y += particle.vy * dt * motionScale;
-    return t < 1;
-  }
-
-  function rgba(rgb, alpha) {
-    return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
-  }
-
-  function drawFlameTongue(ctx, particle, strength) {
-    const t = clamp(particle.age / particle.life, 0, 1);
-    const fade = Math.sin(Math.PI * t) * (1 - t * 0.28);
-    if (fade <= 0.001) return;
-
-    const speed = Math.max(1, Math.hypot(particle.vx, particle.vy));
-    const ux = particle.vx / speed;
-    const uy = particle.vy / speed;
-    const nx = -uy;
-    const ny = ux;
-    const wave = Math.sin(particle.phase + particle.age * particle.frequency * 1.35);
-    const front = particle.layer === 'front';
-    const length = particle.length * particle.scale * (front ? 0.86 : 1.08) * (0.78 + t * 0.50);
-    const widthNow = particle.width * particle.scale * (front ? 1.02 : 0.90) * (0.72 + t * 0.42);
-    const bend = wave * widthNow * (front ? 1.95 : 1.55);
-
-    const tipX = particle.x;
-    const tipY = particle.y;
-    const baseX = tipX - ux * length;
-    const baseY = tipY - uy * length;
-    const controlX = tipX - ux * length * 0.48 + nx * bend;
-    const controlY = tipY - uy * length * 0.48 + ny * bend;
-    const alpha = particle.alpha * fade * (0.76 + strength * 0.34);
-
-    // Soot-dark outer tongue gives the flame weight against the parchment world.
-    const outerGradient = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
-    outerGradient.addColorStop(0, rgba(particle.palette.outer, alpha * 0.16));
-    outerGradient.addColorStop(0.28, rgba(particle.palette.outer, alpha * 0.70));
-    outerGradient.addColorStop(0.72, rgba(particle.palette.outer, alpha * 0.52));
-    outerGradient.addColorStop(1, rgba(particle.palette.outer, 0));
+    const rightShoulderX = baseX + axis.x * length * .22 - nx * (w * .95 - bend * .10);
+    const rightShoulderY = baseY + axis.y * length * .22 - ny * (w * .95 - bend * .10);
+    const rightNeckX = baseX + axis.x * length * .64 - nx * (w * .24 - bend * .66);
+    const rightNeckY = baseY + axis.y * length * .64 - ny * (w * .24 - bend * .66);
 
     ctx.beginPath();
-    ctx.moveTo(baseX + nx * widthNow * 0.52, baseY + ny * widthNow * 0.52);
-    ctx.quadraticCurveTo(controlX + nx * widthNow * 1.10, controlY + ny * widthNow * 1.10, tipX, tipY);
-    ctx.quadraticCurveTo(controlX - nx * widthNow * 0.92, controlY - ny * widthNow * 0.92, baseX - nx * widthNow * 0.52, baseY - ny * widthNow * 0.52);
-    ctx.quadraticCurveTo(baseX - ux * widthNow * 0.18, baseY - uy * widthNow * 0.18, baseX + nx * widthNow * 0.52, baseY + ny * widthNow * 0.52);
+    ctx.moveTo(leftBaseX, leftBaseY);
+    ctx.bezierCurveTo(leftShoulderX, leftShoulderY, leftNeckX, leftNeckY, tipX, tipY);
+    ctx.bezierCurveTo(rightNeckX, rightNeckY, rightShoulderX, rightShoulderY, rightBaseX, rightBaseY);
+    ctx.quadraticCurveTo(baseX - axis.x * w * .18, baseY - axis.y * w * .18, leftBaseX, leftBaseY);
     ctx.closePath();
+  }
+
+  function drawTongue(ctx, screen, anchor, front, strength, vanishingPoint, time, index) {
+    if (strength <= 0.02) return false;
+    const [edge, , size, paletteIndex] = anchor;
+    const a = anchorGeometry(screen, anchor, front);
+    const palette = INDUSTRIAL_PALETTES[paletteIndex % INDUSTRIAL_PALETTES.length];
+    const flight = normalize(vanishingPoint.x - screen.x, vanishingPoint.y - screen.y);
+    const phase = time * (front ? 5.4 : 4.2) + index * 1.17 + paletteIndex * .63;
+    const flicker = .86 + Math.sin(phase) * .10 + Math.sin(phase * 1.73) * .04;
+    const curl = Math.sin(phase * .78) * (front ? .20 : .15);
+
+    const normalWeight = front ? .98 : .78;
+    const flightWeight = front ? .16 : .42;
+    const direction = normalize(
+      a.nx * normalWeight + flight.x * flightWeight + a.tx * curl,
+      a.ny * normalWeight + flight.y * flightWeight + a.ty * curl - .08,
+    );
+
+    const baseLength = (front ? 68 : 86) * size * a.scale;
+    const stateLength = .34 + strength * .78;
+    const length = baseLength * stateLength * flicker;
+    const widthNow = (front ? 14 : 16) * size * a.scale * (.62 + strength * .46);
+    const bend = Math.sin(phase * 1.13) * widthNow * (front ? .54 : .42);
+    const tipX = a.x + direction.x * length + a.tx * bend;
+    const tipY = a.y + direction.y * length + a.ty * bend;
+    const alpha = clamp((front ? .84 : .66) * strength * (.92 + Math.sin(phase * .91) * .08), 0, .95);
+
+    const outerGradient = ctx.createLinearGradient(a.x, a.y, tipX, tipY);
+    outerGradient.addColorStop(0, rgba(palette.core, alpha));
+    outerGradient.addColorStop(.24, rgba(palette.mid, alpha * .98));
+    outerGradient.addColorStop(.62, rgba(palette.outer, alpha * .94));
+    outerGradient.addColorStop(.88, rgba(palette.accent, alpha * .66));
+    outerGradient.addColorStop(1, rgba(palette.outline, alpha * .16));
+
+    flamePath(ctx, a.x, a.y, tipX, tipY, -direction.y, direction.x, widthNow, bend);
     ctx.fillStyle = outerGradient;
     ctx.fill();
+    ctx.strokeStyle = rgba(palette.outline, alpha * .86);
+    ctx.lineWidth = Math.max(1, widthNow * .10);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
 
-    // A narrower industrial-color core makes it read as flame rather than blur.
-    const coreWidth = widthNow * (front ? 0.42 : 0.34);
-    const coreLength = length * (front ? 0.76 : 0.62);
-    const coreBaseX = tipX - ux * coreLength;
-    const coreBaseY = tipY - uy * coreLength;
-    const coreControlX = tipX - ux * coreLength * 0.48 + nx * bend * 0.52;
-    const coreControlY = tipY - uy * coreLength * 0.48 + ny * bend * 0.52;
-    const coreGradient = ctx.createLinearGradient(coreBaseX, coreBaseY, tipX, tipY);
-    coreGradient.addColorStop(0, rgba(particle.palette.ember, alpha * 0.10));
-    coreGradient.addColorStop(0.30, rgba(particle.palette.core, alpha * (front ? 0.82 : 0.48)));
-    coreGradient.addColorStop(0.68, rgba(particle.palette.ember, alpha * (front ? 0.66 : 0.36)));
-    coreGradient.addColorStop(1, rgba(particle.palette.core, 0));
+    const innerBaseX = a.x + direction.x * length * .05;
+    const innerBaseY = a.y + direction.y * length * .05;
+    const innerTipX = a.x + direction.x * length * .70 + a.tx * bend * .38;
+    const innerTipY = a.y + direction.y * length * .70 + a.ty * bend * .38;
+    const innerGradient = ctx.createLinearGradient(innerBaseX, innerBaseY, innerTipX, innerTipY);
+    innerGradient.addColorStop(0, rgba(palette.core, alpha * .98));
+    innerGradient.addColorStop(.48, rgba(palette.mid, alpha * .96));
+    innerGradient.addColorStop(.84, rgba(palette.accent, alpha * .58));
+    innerGradient.addColorStop(1, rgba(palette.outer, 0));
 
+    flamePath(ctx, innerBaseX, innerBaseY, innerTipX, innerTipY, -direction.y, direction.x, widthNow * .43, bend * .34);
+    ctx.save();
+    ctx.shadowBlur = front ? 7 : 5;
+    ctx.shadowColor = rgba(palette.core, alpha * .32);
+    ctx.fillStyle = innerGradient;
+    ctx.fill();
+    ctx.restore();
+
+    // A small bright root keeps every tongue visually attached to the card edge.
     ctx.beginPath();
-    ctx.moveTo(coreBaseX + nx * coreWidth, coreBaseY + ny * coreWidth);
-    ctx.quadraticCurveTo(coreControlX + nx * coreWidth * 1.06, coreControlY + ny * coreWidth * 1.06, tipX, tipY);
-    ctx.quadraticCurveTo(coreControlX - nx * coreWidth * 0.86, coreControlY - ny * coreWidth * 0.86, coreBaseX - nx * coreWidth, coreBaseY - ny * coreWidth);
-    ctx.closePath();
-    ctx.fillStyle = coreGradient;
+    ctx.arc(a.x, a.y, Math.max(1.8, widthNow * .19), 0, TAU);
+    ctx.fillStyle = rgba(palette.core, alpha * .90);
     ctx.fill();
 
-    if (!front) {
-      // Rear flames dissolve into a thin grey soot tail rather than a round cloud.
+    if (!front && strength > .38) {
+      const sootStartX = tipX + direction.x * 3;
+      const sootStartY = tipY + direction.y * 3;
       ctx.beginPath();
-      ctx.moveTo(baseX, baseY);
+      ctx.moveTo(sootStartX, sootStartY);
       ctx.quadraticCurveTo(
-        baseX - ux * length * 0.32 + nx * bend * 0.34,
-        baseY - uy * length * 0.32 + ny * bend * 0.34,
-        baseX - ux * length * 0.58,
-        baseY - uy * length * 0.58,
+        sootStartX + flight.x * length * .20 + a.tx * bend * .22,
+        sootStartY + flight.y * length * .20 + a.ty * bend * .22,
+        sootStartX + flight.x * length * .42,
+        sootStartY + flight.y * length * .42,
       );
-      ctx.strokeStyle = `rgba(92,92,88,${alpha * 0.24})`;
-      ctx.lineWidth = Math.max(0.7, widthNow * 0.14);
+      ctx.strokeStyle = `rgba(74,70,63,${alpha * .12})`;
+      ctx.lineWidth = Math.max(.7, widthNow * .08);
       ctx.lineCap = 'round';
       ctx.stroke();
     }
+
+    return true;
   }
 
-  function drawReducedMotionLayer(ctx, layer, screen, vanishingPoint, strength) {
-    if (strength < 0.12) return;
-    const { halfW, halfH, scale } = cardGeometry(screen);
-    let flightX = vanishingPoint.x - screen.x;
-    let flightY = vanishingPoint.y - screen.y;
-    const magnitude = Math.max(1, Math.hypot(flightX, flightY));
-    flightX /= magnitude;
-    flightY /= magnitude;
-
-    const count = layer === 'front' ? 5 : 7;
-    for (let i = 0; i < count; i++) {
-      const side = i % 2 ? 1 : -1;
-      const front = layer === 'front';
-      const x = screen.x + side * halfW * (front ? 0.96 : 1.06);
-      const y = screen.y + ((i / Math.max(1, count - 1)) - 0.5) * halfH * 1.45;
-      const palette = INDUSTRIAL_PALETTES[i % INDUSTRIAL_PALETTES.length];
-      drawFlameTongue(ctx, {
-        layer,
-        x,
-        y,
-        vx: flightX * 42 + side * 12,
-        vy: flightY * 42 - 12,
-        tangentX: side,
-        tangentY: 0.3,
-        age: 0.42,
-        life: 1.35,
-        width: front ? 10 : 8,
-        length: front ? 34 : 46,
-        scale,
-        phase: i * 0.82,
-        frequency: 2.8,
-        curl: 22,
-        alpha: (front ? 0.30 : 0.18) + strength * 0.14,
-        palette,
-      }, strength);
-    }
+  function drawEdgeHeat(ctx, screen, strength) {
+    if (strength < .28) return;
+    const { halfW, halfH, roll } = cardGeometry(screen);
+    ctx.save();
+    ctx.translate(screen.x, screen.y);
+    ctx.rotate(roll);
+    ctx.strokeStyle = `rgba(177,74,36,${.08 + strength * .12})`;
+    ctx.lineWidth = Math.max(1, screen.scale * 1.4);
+    ctx.strokeRect(-halfW, -halfH, halfW * 2, halfH * 2);
+    ctx.restore();
   }
 
-  function render({ screen, projected, vanishingPoint, timeFieldStrength, stopTitle, interactionHold }) {
+  function render({ screen, projected, vanishingPoint, timeFieldStrength, interactionHold }) {
     const now = performance.now();
-    const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+    const dt = Math.min(.05, Math.max(.001, (now - lastTime) / 1000));
     lastTime = now;
     if (rearCanvas.width === 0 || width !== innerWidth || height !== innerHeight) resize();
 
     const strength = stateStrength(projected.state, timeFieldStrength);
-    const movedFar = lastCenter && Math.hypot(screen.x - lastCenter.x, screen.y - lastCenter.y) > Math.max(innerWidth, innerHeight) * 0.32;
-    if (stopTitle !== lastStopTitle || movedFar) clearParticles();
-    lastStopTitle = stopTitle;
-    lastCenter = { x: screen.x, y: screen.y };
+    const timeScale = reducedMotion ? 0 : (interactionHold ? .32 : (.72 + (1 - timeFieldStrength) * .34));
+    phaseTime += dt * timeScale;
 
     rearCtx.clearRect(0, 0, width, height);
     frontCtx.clearRect(0, 0, width, height);
 
-    if (reducedMotion) {
-      clearParticles();
-      drawReducedMotionLayer(rearCtx, 'rear', screen, vanishingPoint, strength);
-      drawReducedMotionLayer(frontCtx, 'front', screen, vanishingPoint, strength);
-    } else {
-      rearCarry += rearEmissionRate(projected.state, strength) * dt;
-      frontCarry += frontEmissionRate(projected.state, strength) * dt;
+    drawEdgeHeat(rearCtx, screen, strength);
 
-      while (rearCarry >= 1 && rearParticles.length < MAX_REAR_PARTICLES) {
-        spawn(screen, projected, vanishingPoint, strength, 'rear');
-        rearCarry -= 1;
-      }
-      while (frontCarry >= 1 && frontParticles.length < MAX_FRONT_PARTICLES) {
-        spawn(screen, projected, vanishingPoint, strength, 'front');
-        frontCarry -= 1;
-      }
+    let rearCount = 0;
+    let frontCount = 0;
+    const animationTime = reducedMotion ? 0.76 : phaseTime;
 
-      const motionScale = interactionHold ? 0.33 : (0.78 + (1 - timeFieldStrength) * 0.38);
-      for (const particles of [rearParticles, frontParticles]) {
-        for (let i = particles.length - 1; i >= 0; i--) {
-          if (!updateParticle(particles[i], dt, motionScale)) particles.splice(i, 1);
-        }
-      }
+    rearCtx.save();
+    rearCtx.globalCompositeOperation = 'source-over';
+    REAR_ANCHORS.forEach((anchor, index) => {
+      if (drawTongue(rearCtx, screen, anchor, false, strength, vanishingPoint, animationTime, index)) rearCount++;
+    });
+    rearCtx.restore();
 
-      for (const particle of rearParticles) drawFlameTongue(rearCtx, particle, strength);
-      for (const particle of frontParticles) drawFlameTongue(frontCtx, particle, strength);
-    }
-
-    rearCanvas.dataset.flameState = projected.state;
-    frontCanvas.dataset.flameState = projected.state;
-    frontCanvas.dataset.interactionHold = interactionHold ? 'true' : 'false';
+    frontCtx.save();
+    frontCtx.globalCompositeOperation = 'source-over';
+    FRONT_ANCHORS.forEach((anchor, index) => {
+      if (drawTongue(frontCtx, screen, anchor, true, strength, vanishingPoint, animationTime + .19, index + 23)) frontCount++;
+    });
+    frontCtx.restore();
 
     return {
       contract: FLAME_CONTRACT,
-      renderer: 'dual-canvas-2d-industrial-flames',
+      renderer: 'dual-canvas-anchored-flame-corona',
       strength,
-      particleCount: rearParticles.length + frontParticles.length,
-      rearParticleCount: rearParticles.length,
-      frontParticleCount: frontParticles.length,
-      maxParticles: MAX_REAR_PARTICLES + MAX_FRONT_PARTICLES,
-      state: projected.state,
-      pointerEvents: 'none',
-      frontLayer: true,
+      tongueCount: rearCount + frontCount,
+      rearTongueCount: rearCount,
+      frontTongueCount: frontCount,
+      particleCount: rearCount + frontCount,
+      rearParticleCount: rearCount,
+      frontParticleCount: frontCount,
+      maxParticles: REAR_ANCHORS.length + FRONT_ANCHORS.length,
       rearLayer: true,
+      frontLayer: true,
+      pointerEvents: 'none',
     };
   }
 
   resize();
-  return {
-    canvas: rearCanvas,
-    rearCanvas,
-    frontCanvas,
-    render,
-    contract: FLAME_CONTRACT,
-  };
+  return { rearCanvas, frontCanvas, render, contract: FLAME_CONTRACT };
 }
