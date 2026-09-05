@@ -39,6 +39,7 @@ try {
     }
   }
   await run('Syntax: browser proof', process.execPath, ['--check', 'verify-canvas.mjs']);
+  await run('Syntax: ship smoothness browser proof', process.execPath, ['--check', 'verify-ship-smoothness-browser.mjs']);
   await run('Syntax: billboard browser proof', process.execPath, ['--check', 'verify-billboard-browser.mjs']);
   await run('Syntax: destination browser proof', process.execPath, ['--check', 'verify-destination-browser.mjs']);
   await run('Syntax: mobile destination browser proof', process.execPath, ['--check', 'verify-mobile-destination-browser.mjs']);
@@ -85,6 +86,7 @@ try {
   if (!ready) throw new Error(`Packaged site did not become ready: ${url}`);
   process.env.PORTFOLIO_URL = url;
   await run('Flight baseline and hiring experience', process.execPath, ['verify-canvas.mjs']);
+  await run('Ship smoothness without travel lag', process.execPath, ['verify-ship-smoothness-browser.mjs']);
   await run('Billboard depth and interaction experience', process.execPath, ['verify-billboard-browser.mjs']);
   await run('Destination arrival briefing experience', process.execPath, ['verify-destination-browser.mjs']);
   await run('Mobile destination depth experience', process.execPath, ['verify-mobile-destination-browser.mjs']);
