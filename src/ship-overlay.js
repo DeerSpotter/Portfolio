@@ -56,9 +56,16 @@ const tangent = new THREE.Vector3();
 const smoothTangent = new THREE.Vector3(0, 0, -1);
 const curvatureProbe = new THREE.Vector3();
 const right = new THREE.Vector3();
+const shipForward = new THREE.Vector3();
+const cameraForward = new THREE.Vector3();
+const cameraRight = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
+const shipScreenProbe = new THREE.Vector3();
+const previousCameraAnchor = new THREE.Vector3();
+const cameraTransportDelta = new THREE.Vector3();
 let poseInitialized = false;
+let cameraAnchorInitialized = false;
 let activeBankSide = 0;
 let observedLoopCycle = null;
 let bankSeamNeutralizing = false;
@@ -68,6 +75,10 @@ const BANK_CENTER_EPSILON = 0.025;
 const BANK_MAX_ROLL_RATE = 2.2;
 const BANK_SEAM_APPROACH_PROGRESS = 0.10;
 const BANK_SEAM_RELEASE_PROGRESS = 0.04;
+const SHIP_SEAM_CAMERA_BLEND_IN = 0.82;
+const SHIP_SEAM_CAMERA_LOCK_PROGRESS = 0.90;
+const SHIP_SEAM_CAMERA_RELEASE_PROGRESS = 0.04;
+const SHIP_SEAM_CAMERA_BLEND_OUT = 0.10;
 const REDUCED_MOTION_BANK_SCALE = 0.62;
 
 function wrap01(value) {
@@ -78,6 +89,32 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function smoothstep(edge0, edge1, value) {
+  const t = clamp((value - edge0) / Math.max(0.000001, edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function blendForwardDirection(out, from, to, amount) {
+  if (amount <= 0) return out.copy(from);
+  if (amount >= 1) return out.copy(to);
+
+  const fromYaw = Math.atan2(-from.x, -from.z);
+  const toYaw = Math.atan2(-to.x, -to.z);
+  const yawDelta = Math.atan2(Math.sin(toYaw - fromYaw), Math.cos(toYaw - fromYaw));
+  const yaw = fromYaw + yawDelta * amount;
+
+  const fromPitch = Math.asin(clamp(from.y, -1, 1));
+  const toPitch = Math.asin(clamp(to.y, -1, 1));
+  const pitch = THREE.MathUtils.lerp(fromPitch, toPitch, amount);
+  const cosPitch = Math.cos(pitch);
+
+  return out.set(
+    -Math.sin(yaw) * cosPitch,
+    Math.sin(pitch),
+    -Math.cos(yaw) * cosPitch,
+  ).normalize();
+}
+
 function damp(current, target, lambda, dt) {
   return THREE.MathUtils.lerp(current, target, 1 - Math.exp(-lambda * dt));
 }
@@ -85,6 +122,16 @@ function damp(current, target, lambda, dt) {
 function dampAngle(current, target, lambda, dt) {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + delta * (1 - Math.exp(-lambda * dt));
+}
+
+function seamCameraBlend(progress) {
+  if (progress >= SHIP_SEAM_CAMERA_BLEND_IN) {
+    return smoothstep(SHIP_SEAM_CAMERA_BLEND_IN, SHIP_SEAM_CAMERA_LOCK_PROGRESS, progress);
+  }
+  if (progress <= SHIP_SEAM_CAMERA_BLEND_OUT) {
+    return 1 - smoothstep(SHIP_SEAM_CAMERA_RELEASE_PROGRESS, SHIP_SEAM_CAMERA_BLEND_OUT, progress);
+  }
+  return 0;
 }
 
 let lastTime = performance.now();
@@ -122,11 +169,8 @@ function animate(now) {
     activeBankSide = 0;
   }
 
-  // Begin leveling before the document actually recycles. The chase camera has
-  // a small roll-relative lateral offset, so waiting until loopCycle changes can
-  // make the ship appear to kick sideways as roll is removed after the wrap.
-  // Holding a level corridor from the end of 06 through the beginning of 01
-  // lets both ship roll and camera framing settle before the reloop occurs.
+  // Begin leveling before the document actually recycles. This keeps banking
+  // from adding another lateral cue while the 06 -> 01 camera seam is active.
   if (seamNeutralZone) {
     bankSeamNeutralizing = true;
     activeBankSide = 0;
@@ -212,16 +256,59 @@ function animate(now) {
     time: reducedMotion ? 0 : now * 0.001,
   });
 
+  // The supplied video shows the real problem: the closed route doubles back
+  // immediately before 06 -> 01, so its tangent reverses almost 180 degrees.
+  // A chase camera built directly from that antipodal tangent swaps its behind
+  // point from one side of the ship to the other and makes the ship appear to
+  // launch across the viewport. Do not rewrite the route. Instead, only in this
+  // seam corridor, attach the camera basis to the already rendered ship body.
+  // Blend by wrapped yaw and pitch rather than normalized vector lerp. A linear
+  // blend of nearly opposite unit vectors can collapse toward zero, so its
+  // normalization can create the exact one-frame flip this seam path prevents.
+  shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
+  const cameraSeamBlend = seamCameraBlend(progress);
+  blendForwardDirection(cameraForward, smoothTangent, shipForward, cameraSeamBlend);
+  cameraRight.crossVectors(cameraForward, worldUp).normalize();
+  if (cameraRight.lengthSq() < 0.001) cameraRight.set(1, 0, 0);
+
   const cameraBankOffset = -ship.rotation.z * 0.92;
   desiredCamera.copy(smoothPos)
-    .addScaledVector(smoothTangent, -11.6 - warpAmount * 5.5)
+    .addScaledVector(cameraForward, -11.6 - warpAmount * 5.5)
     .addScaledVector(worldUp, 4.5 + warpAmount * 0.8)
-    .addScaledVector(right, cameraBankOffset);
+    .addScaledVector(cameraRight, cameraBankOffset);
   const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);
-  camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
 
+  // Normal chase flight intentionally lets the camera trail the ship in world
+  // space. At the 06 -> 01 reversal that same lag is the remaining visible kick:
+  // the ship translates into the new direction while the camera is still
+  // trailing the old one. Through the seam only, transport the camera by the
+  // ship's actual frame-to-frame displacement first. The existing camera damp
+  // then acts on the relative chase offset instead of on the ship translation.
+  if (!cameraAnchorInitialized) {
+    previousCameraAnchor.copy(smoothPos);
+    cameraAnchorInitialized = true;
+  }
+  cameraTransportDelta.subVectors(smoothPos, previousCameraAnchor);
+  camera.position.addScaledVector(cameraTransportDelta, cameraSeamBlend);
+  previousCameraAnchor.copy(smoothPos);
+
+  // The offset behind the ship also rotates quickly at this seam. Blend the
+  // usual loose chase damping into a rigid ship-relative rig while seam lock is
+  // active, so the camera cannot trail one frame behind that offset rotation.
+  // At blend=0 this is the exact established camera alpha. At blend=1 the
+  // camera is fully attached to the desired relative chase pose for the seam.
+  const normalCameraAlpha = 1 - Math.exp(-cameraLambda * dt);
+  const cameraFollowAlpha = THREE.MathUtils.lerp(normalCameraAlpha, 1, cameraSeamBlend);
+  camera.position.lerp(desiredCamera, cameraFollowAlpha);
+
+  // The camera position was already ship-relative at the seam, but the old
+  // forward look target still swung across the ship as the route reversed.
+  // Collapse that cinematic lead to the ship while seam lock is active, then
+  // restore it smoothly after 01 clears. This removes the remaining screen-space
+  // lateral sweep without changing the route, ship pose, or normal chase flight.
+  const seamLookAhead = (13.5 + warpAmount * 12) * (1 - cameraSeamBlend);
   desiredLook.copy(smoothPos)
-    .addScaledVector(smoothTangent, 13.5 + warpAmount * 12)
+    .addScaledVector(cameraForward, seamLookAhead)
     .addScaledVector(worldUp, 0.35);
   camera.lookAt(desiredLook);
 
@@ -232,13 +319,22 @@ function animate(now) {
     camera.updateProjectionMatrix();
   }
 
+  // Project against the same camera transform that this frame will render.
+  // Without this explicit update, Vector3.project() can observe the previous
+  // frame's matrixWorldInverse after camera.position/lookAt changed above.
+  camera.updateMatrixWorld();
+  shipScreenProbe.copy(ship.position).project(camera);
+  const shipScreenX = (shipScreenProbe.x * 0.5 + 0.5) * window.innerWidth;
+  const shipScreenY = (-shipScreenProbe.y * 0.5 + 0.5) * window.innerHeight;
+  const cameraDistanceToShip = camera.position.distanceTo(ship.position);
+
   window.__portfolioShipDebug = {
     ready: true,
     engine: 'three-overlay',
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-flight-centered-bank-v4',
+    motionContract: 'known-good-flight-centered-bank-v6',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -269,6 +365,8 @@ function animate(now) {
       pitch: ship.rotation.x,
       yaw: ship.rotation.y,
       roll: ship.rotation.z,
+      screenX: shipScreenX,
+      screenY: shipScreenY,
     },
     camera: {
       x: camera.position.x,
@@ -276,6 +374,11 @@ function animate(now) {
       z: camera.position.z,
       fov: camera.fov,
       bankOffset: cameraBankOffset,
+      seamBlend: cameraSeamBlend,
+      forwardBlend: 'wrapped-yaw-pitch',
+      translationMode: cameraSeamBlend > 0 ? 'ship-relative' : 'world-chase',
+      followAlpha: cameraFollowAlpha,
+      distanceToShip: cameraDistanceToShip,
     },
     backgroundRenderer: state.engine,
     movement: state.movement,
