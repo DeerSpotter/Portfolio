@@ -157,10 +157,9 @@ try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready, null, { timeout: 15000 });
 
-  // This proof intentionally advances progress monotonically. A previous test
-  // jumped backward from 0.94 to 0.00 across the closed-route seam, which is
-  // not representative of normal forward flight and conflicts with preserving
-  // the outgoing pane until its side fade is complete.
+  // Advance monotonically, matching the normal forward-flight experience. The
+  // outgoing pane is allowed to finish its side fade before the next pane owns
+  // the single billboard surface.
   const engineeringApproaching = await moveTo(0.110);
   const engineeringArming = await moveTo(0.145);
   const engineeringActive = await moveTo(0.178);
