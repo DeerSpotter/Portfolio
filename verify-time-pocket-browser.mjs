@@ -22,6 +22,7 @@ try {
   await page.waitForFunction(() => (
     window.__portfolioTimePocketDebug?.mode === 'time-pocket'
     && window.__portfolioTimePocketDebug?.coastStrength > 0.5
+    && window.__portfolioTimePocketDebug?.timeFieldStrength > 0.70
     && window.__portfolioTimePocketDebug?.lockedStop === 'Engineering'
   ), null, { timeout: 3000 });
 
@@ -33,6 +34,8 @@ try {
     ship: structuredClone(window.__portfolioShipDebug),
     heading: document.getElementById('detailTitle').textContent,
     current: document.querySelector('[data-stop][aria-current="step"]')?.dataset.stop,
+    flightMode: document.body.dataset.flightMode,
+    worldFilter: getComputedStyle(document.getElementById('world')).filter,
   }));
 
   await page.waitForTimeout(900);
@@ -45,6 +48,8 @@ try {
     ship: structuredClone(window.__portfolioShipDebug),
     heading: document.getElementById('detailTitle').textContent,
     current: document.querySelector('[data-stop][aria-current="step"]')?.dataset.stop,
+    flightMode: document.body.dataset.flightMode,
+    worldFilter: getComputedStyle(document.getElementById('world')).filter,
   }));
 
   const driftPx = coast.y - start.y;
@@ -55,14 +60,14 @@ try {
     coast.ship.ship.z - start.ship.ship.z,
   );
 
-  if (!(driftPx > 2 && driftPx < 18)) {
-    throw new Error(`Time pocket did not coast slowly: ${driftPx.toFixed(2)}px in 900ms.`);
+  if (!(driftPx > 1.5 && driftPx < 15)) {
+    throw new Error(`Time field did not produce a slow forward pass: ${driftPx.toFixed(2)}px in 900ms.`);
   }
   if (!(driftProgress > 0 && driftProgress < 0.006)) {
-    throw new Error(`Time pocket progress was not a slow forward crawl: ${driftProgress}.`);
+    throw new Error(`Time field progress was not a slow forward crawl: ${driftProgress}.`);
   }
   if (!(shipDrift > 0.02)) {
-    throw new Error(`Ship visually froze during time pocket: displacement=${shipDrift}.`);
+    throw new Error(`Ship visually froze during time dilation: displacement=${shipDrift}.`);
   }
   if (coast.pocket.lockedStop !== 'Engineering' || coast.billboard.stop !== 'Engineering') {
     throw new Error(`Focus changed during slow pass: pocket=${coast.pocket.lockedStop}, billboard=${coast.billboard.stop}.`);
@@ -76,8 +81,23 @@ try {
   if (!coast.billboard.interactive || coast.billboard.state !== 'active') {
     throw new Error(`Slow-pass billboard is not clickable: state=${coast.billboard.state}, interactive=${coast.billboard.interactive}.`);
   }
-  if (!(coast.ship.coastAmount > 0.45) || coast.ship.engineState !== 'idle-drift') {
-    throw new Error(`Ship did not enter animated idle thrust: coast=${coast.ship.coastAmount}, state=${coast.ship.engineState}.`);
+  if (!(coast.pocket.timeFieldStrength > 0.70)) {
+    throw new Error(`Stop proximity did not engage the time field strongly enough: ${coast.pocket.timeFieldStrength}.`);
+  }
+  if (!(coast.pocket.coastRatePxPerSecond >= 4.4 && coast.pocket.coastRatePxPerSecond < 8)) {
+    throw new Error(`Near-stop coast rate did not dilate enough: ${coast.pocket.coastRatePxPerSecond}px/s.`);
+  }
+  if (!(coast.billboard.timeFieldStrength > 0.65)) {
+    throw new Error(`Billboard did not receive time-field proximity: ${coast.billboard.timeFieldStrength}.`);
+  }
+  if (!(coast.ship.coastAmount > 0.45) || !(coast.ship.timeFieldAmount > 0.45) || coast.ship.engineState !== 'idle-drift') {
+    throw new Error(`Ship did not enter smoothed animated idle thrust: coast=${coast.ship.coastAmount}, field=${coast.ship.timeFieldAmount}, state=${coast.ship.engineState}.`);
+  }
+  if (coast.flightMode !== 'time-pocket') {
+    throw new Error(`DOM did not enter time-pocket focus mode: ${coast.flightMode}.`);
+  }
+  if (coast.worldFilter === 'none') {
+    throw new Error('Artwork remained at full visual intensity during the interaction window.');
   }
 
   // A deliberate backwards waypoint jump must replace the latch immediately.
@@ -103,19 +123,28 @@ try {
   await page.waitForFunction(() => window.__portfolioTimePocketDebug?.lockedStop === 'Engineering', null, { timeout: 3000 });
   await page.waitForFunction(() => window.__portfolioTimePocketDebug?.mode === 'time-pocket', null, { timeout: 3000 });
   await page.mouse.wheel(0, 600);
-  await page.waitForFunction(() => window.__portfolioTimePocketDebug?.mode === 'flight', null, { timeout: 1000 });
+  await page.waitForFunction(() => (
+    window.__portfolioTimePocketDebug?.mode === 'flight'
+    && document.body.dataset.flightMode === 'flight'
+  ), null, { timeout: 1000 });
   const resumed = await page.evaluate(() => ({
     pocket: structuredClone(window.__portfolioTimePocketDebug),
     ship: structuredClone(window.__portfolioShipDebug),
+    flightMode: document.body.dataset.flightMode,
   }));
-  if (resumed.pocket.mode !== 'flight') throw new Error('User input did not release the time pocket.');
+  if (resumed.pocket.mode !== 'flight' || resumed.flightMode !== 'flight') {
+    throw new Error('User input did not release the time-dilation field.');
+  }
 
   console.log('[portfolio-time-pocket-browser] PASS');
   console.log(`[portfolio-time-pocket-browser] coast=${driftPx.toFixed(2)}px/900ms`);
+  console.log(`[portfolio-time-pocket-browser] rate=${coast.pocket.coastRatePxPerSecond.toFixed(2)}px/s`);
+  console.log(`[portfolio-time-pocket-browser] field=${coast.pocket.timeFieldStrength.toFixed(3)}`);
   console.log(`[portfolio-time-pocket-browser] progress=${driftProgress.toFixed(5)}`);
   console.log(`[portfolio-time-pocket-browser] shipDrift=${shipDrift.toFixed(3)}`);
   console.log('[portfolio-time-pocket-browser] focus=Engineering-latched');
   console.log('[portfolio-time-pocket-browser] reverseJump=immediate-reacquire');
+  console.log('[portfolio-time-pocket-browser] artwork=quieted-not-hidden');
   console.log('[portfolio-time-pocket-browser] interaction=active-during-slow-pass');
   console.log('[portfolio-time-pocket-browser] engine=idle-drift-animated');
   console.log('[portfolio-time-pocket-browser] resume=user-wheel-releases-pocket');
