@@ -4,10 +4,23 @@ import './time-pocket-flight.js';
 
 const billboard = document.querySelector('.detail');
 const action = document.getElementById('detailAction');
+const hud = document.getElementById('hud');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TAU = Math.PI * 2;
 const INTERACTION_HOLD_MS = 3500;
 const INTERACTION_FIELD_THRESHOLD = 0.72;
+const SMOKE_CONTRACT = 'charcoal-grey-billboard-smoke-v1';
+const SMOKE_PLUME_COUNT = 7;
+
+const smokeField = document.createElement('div');
+smokeField.className = 'billboard-smoke-field';
+smokeField.setAttribute('aria-hidden', 'true');
+for (let index = 0; index < SMOKE_PLUME_COUNT; index++) {
+  const plume = document.createElement('span');
+  plume.className = `billboard-smoke-plume plume-${index + 1}`;
+  smokeField.append(plume);
+}
+hud.append(smokeField);
 
 let displayed = null;
 let lastState = '';
@@ -191,6 +204,49 @@ function updateAccessibility(interactive) {
   action.setAttribute('aria-disabled', interactive ? 'false' : 'true');
 }
 
+function smokeFor(screen, timeFieldStrength) {
+  const baseByState = {
+    distant: 0.035,
+    approaching: 0.24,
+    arming: 0.58,
+    active: 0.86,
+    passing: 0.44,
+  };
+  const timeBoost = screen.state === 'active' ? timeFieldStrength * 0.14 : timeFieldStrength * 0.05;
+  const strength = clamp(baseByState[screen.state] + timeBoost, 0.02, 1);
+  const centerward = -Math.sign(screen.side || 1);
+  const driftSmall = centerward * (8 + screen.t * 14 + screen.pass * 18);
+  const driftLarge = centerward * (18 + screen.t * 26 + screen.pass * 38);
+  const rise = 6 + screen.t * 14 + screen.pass * 6;
+  const stretch = 1 + screen.t * 0.18 + screen.pass * 0.22;
+  return {
+    strength,
+    driftSmall,
+    driftLarge,
+    rise,
+    stretch,
+    side: screen.side < 0 ? 'left' : 'right',
+  };
+}
+
+function renderSmoke(screen, projected, smoke, timeFieldStrength) {
+  smokeField.style.setProperty('--smoke-x', `${screen.x.toFixed(2)}px`);
+  smokeField.style.setProperty('--smoke-y', `${screen.y.toFixed(2)}px`);
+  smokeField.style.setProperty('--smoke-scale', screen.scale.toFixed(4));
+  smokeField.style.setProperty('--smoke-yaw', `${screen.yaw.toFixed(2)}deg`);
+  smokeField.style.setProperty('--smoke-roll', `${screen.roll.toFixed(2)}deg`);
+  smokeField.style.setProperty('--smoke-skew', `${screen.skew.toFixed(2)}deg`);
+  smokeField.style.setProperty('--smoke-strength', smoke.strength.toFixed(3));
+  smokeField.style.setProperty('--smoke-drift-small', `${smoke.driftSmall.toFixed(2)}px`);
+  smokeField.style.setProperty('--smoke-drift-large', `${smoke.driftLarge.toFixed(2)}px`);
+  smokeField.style.setProperty('--smoke-rise', `${smoke.rise.toFixed(2)}px`);
+  smokeField.style.setProperty('--smoke-stretch', smoke.stretch.toFixed(3));
+  smokeField.style.setProperty('--smoke-time-field', timeFieldStrength.toFixed(3));
+  smokeField.style.setProperty('--smoke-alpha', clamp(projected.alpha * (0.34 + smoke.strength * 0.86), 0.02, 0.92).toFixed(3));
+  smokeField.dataset.smokeState = projected.state;
+  smokeField.dataset.smokeSide = smoke.side;
+}
+
 function render(now = performance.now()) {
   const debug = window.__portfolioCanvasDebug;
   if (!debug?.ready) {
@@ -205,6 +261,7 @@ function render(now = performance.now()) {
   const projected = project(stop, debug.progress, coastStrength);
   const hold = heldScreen(stop, projected, pocket, timeFieldStrength, now);
   const screen = hold.screen;
+  const smoke = smokeFor(projected, timeFieldStrength);
 
   if (stop !== displayed) {
     displayed = stop;
@@ -225,6 +282,10 @@ function render(now = performance.now()) {
   billboard.style.setProperty('--time-field', timeFieldStrength.toFixed(3));
   billboard.dataset.timePocket = coastStrength > 0.45 ? 'true' : 'false';
   billboard.dataset.interactionHold = hold.held ? 'true' : 'false';
+
+  renderSmoke(screen, projected, smoke, timeFieldStrength);
+  smokeField.dataset.timePocket = coastStrength > 0.45 ? 'true' : 'false';
+  smokeField.dataset.interactionHold = hold.held ? 'true' : 'false';
 
   if (projected.state !== lastState) {
     lastState = projected.state;
@@ -252,6 +313,11 @@ function render(now = performance.now()) {
     skew: screen.skew,
     coastStrength,
     timeFieldStrength,
+    smokeStrength: smoke.strength,
+    smokeSide: smoke.side,
+    smokeDrift: smoke.driftLarge,
+    smokePlumeCount: SMOKE_PLUME_COUNT,
+    smokeContract: SMOKE_CONTRACT,
     contract: 'approaching-skewed-interactive-billboard-v3',
   };
 
