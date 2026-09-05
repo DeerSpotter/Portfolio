@@ -1,0 +1,127 @@
+/* Desktop flight billboard. The existing .detail element is transformed into
+   world-space content instead of duplicating or covering it with another card. */
+@media (min-width: 901px) {
+  #hud { perspective: 1400px; }
+
+  .detail {
+    --billboard-x: 50vw;
+    --billboard-y: 50vh;
+    --billboard-scale: .18;
+    --billboard-alpha: .15;
+    --billboard-yaw: 0deg;
+    --billboard-roll: 0deg;
+    --billboard-skew: 0deg;
+    --billboard-glow: 0;
+    --billboard-color: var(--rust);
+
+    position: absolute;
+    left: 0;
+    top: 0;
+    align-self: auto;
+    justify-self: auto;
+    width: min(430px, 31vw);
+    max-height: min(60vh, 620px);
+    transform-origin: 50% 50%;
+    transform:
+      translate3d(var(--billboard-x), var(--billboard-y), 0)
+      translate(-50%, -50%)
+      perspective(900px)
+      rotateY(var(--billboard-yaw))
+      rotateZ(var(--billboard-roll))
+      skewY(var(--billboard-skew))
+      scale(var(--billboard-scale));
+    opacity: var(--billboard-alpha);
+    pointer-events: none;
+    will-change: transform, opacity, filter;
+    border-color: color-mix(in srgb, var(--billboard-color) 28%, var(--line));
+    background:
+      linear-gradient(112deg, rgba(255, 246, 220, .97), rgba(231, 216, 184, .92));
+    box-shadow:
+      0 20px 46px rgba(77, 53, 24, .10),
+      0 0 calc(34px * var(--billboard-glow)) color-mix(in srgb, var(--billboard-color) 42%, transparent);
+    transition:
+      border-color 130ms linear,
+      box-shadow 130ms linear,
+      filter 130ms linear;
+    overflow: hidden;
+  }
+
+  .detail::before,
+  .detail::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  .detail::before {
+    inset: 7px;
+    border: 1px solid color-mix(in srgb, var(--billboard-color) calc(18% + 54% * var(--billboard-glow)), transparent);
+    box-shadow: inset 0 0 calc(20px * var(--billboard-glow)) color-mix(in srgb, var(--billboard-color) 24%, transparent);
+    opacity: calc(.18 + .72 * var(--billboard-glow));
+  }
+
+  .detail::after {
+    left: -10%;
+    right: -10%;
+    height: 2px;
+    top: -8%;
+    background: linear-gradient(90deg, transparent, var(--billboard-color), transparent);
+    opacity: 0;
+    filter: blur(.2px);
+  }
+
+  .detail[data-billboard-state='approaching'] {
+    filter: contrast(1.02) saturate(1.04);
+  }
+
+  .detail[data-billboard-state='arming'] {
+    pointer-events: auto;
+    filter: contrast(1.07) saturate(1.11) brightness(1.04);
+    animation: billboard-arm 720ms steps(2, end) infinite;
+  }
+
+  .detail[data-billboard-state='arming']::after,
+  .detail[data-billboard-state='active']::after {
+    opacity: .72;
+    animation: billboard-scan 980ms linear infinite;
+  }
+
+  .detail[data-billboard-state='active'] {
+    pointer-events: auto;
+    border-color: color-mix(in srgb, var(--billboard-color) 72%, var(--ink));
+    filter: contrast(1.08) saturate(1.14) brightness(1.05);
+    box-shadow:
+      0 24px 56px rgba(77, 53, 24, .18),
+      0 0 32px color-mix(in srgb, var(--billboard-color) 38%, transparent),
+      0 0 78px color-mix(in srgb, var(--billboard-color) 18%, transparent);
+  }
+
+  .detail[data-billboard-state='passing'] {
+    pointer-events: none;
+    filter: saturate(.82) brightness(.96);
+  }
+
+  .detail[data-interactive='false'] .detail-action {
+    cursor: default;
+  }
+
+  @keyframes billboard-arm {
+    0%, 100% { filter: contrast(1.05) saturate(1.08) brightness(1.01); }
+    42% { filter: contrast(1.10) saturate(1.18) brightness(1.08); }
+    46% { filter: contrast(1.02) saturate(1.04) brightness(.98); }
+    60% { filter: contrast(1.12) saturate(1.16) brightness(1.06); }
+  }
+
+  @keyframes billboard-scan {
+    from { transform: translateY(0); }
+    to { transform: translateY(620px); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) and (min-width: 901px) {
+  .detail,
+  .detail::after {
+    animation: none !important;
+  }
+}
