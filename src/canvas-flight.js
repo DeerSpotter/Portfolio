@@ -9,7 +9,6 @@ const velocityEl = document.getElementById('velocity');
 const loopEl = document.getElementById('cycle');
 
 const TAU = Math.PI * 2;
-const TOUCH_LOOP_SWIPE_THRESHOLD = 18;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const random = mulberry32(0x51a7f00d);
 const stars = [];
@@ -77,8 +76,6 @@ let lastTime = performance.now();
 let lastMotionTime = performance.now();
 let activeStop = null;
 let trailMode = 'follow';
-let touchStartY = null;
-let touchLastY = null;
 
 function mulberry32(seed) {
   return function () {
@@ -175,25 +172,6 @@ function recycleScroll(direction) {
   }
 }
 
-function tryRecycleTouchGesture(currentY) {
-  if (touchStartY === null || currentY === null) return false;
-
-  const distance = touchStartY - currentY;
-  if (Math.abs(distance) < TOUCH_LOOP_SWIPE_THRESHOLD) return false;
-
-  const direction = Math.sign(distance);
-  const { maxScroll } = scrollMetrics();
-  const atEdge = direction > 0
-    ? scrollY >= maxScroll - 3
-    : scrollY <= 3;
-
-  if (!atEdge) return false;
-
-  recycleScroll(direction);
-  touchStartY = currentY;
-  return true;
-}
-
 addEventListener('scroll', updateTargetFromScroll, { passive: true });
 addEventListener('wheel', event => {
   const direction = Math.sign(event.deltaY);
@@ -205,30 +183,11 @@ addEventListener('wheel', event => {
     recycleScroll(direction);
   }
 }, { passive: false });
-addEventListener('touchstart', event => {
-  if (event.touches.length !== 1) {
-    touchStartY = null;
-    touchLastY = null;
-    return;
-  }
-
-  touchStartY = event.touches[0].clientY;
-  touchLastY = touchStartY;
-}, { passive: true });
-addEventListener('touchmove', event => {
-  if (event.touches.length !== 1 || touchStartY === null) return;
-  touchLastY = event.touches[0].clientY;
-  tryRecycleTouchGesture(touchLastY);
-}, { passive: true });
-addEventListener('touchend', () => {
-  tryRecycleTouchGesture(touchLastY);
-  touchStartY = null;
-  touchLastY = null;
-}, { passive: true });
-addEventListener('touchcancel', () => {
-  touchStartY = null;
-  touchLastY = null;
-}, { passive: true });
+addEventListener('portfolio-flight-loop-intent', event => {
+  const direction = Math.sign(Number(event.detail?.direction));
+  if (!direction) return;
+  recycleScroll(direction);
+});
 addEventListener('resize', resize, { passive: true });
 addEventListener('visibilitychange', () => {
   if (!document.hidden) lastTime = performance.now();
@@ -1039,7 +998,7 @@ function animate(now) {
     ribbon: RIBBON_CONTRACT,
     ribbonStrands: 3,
     wakeMaxRadius: WAKE_MAX_RADIUS,
-    inputLoop: 'wheel-touch-edge-recycle-v1',
+    inputLoop: 'wheel-plus-semantic-touch-intent-v2',
   };
 
   requestAnimationFrame(animate);
