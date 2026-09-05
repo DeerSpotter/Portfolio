@@ -266,8 +266,12 @@ function render(now = performance.now()) {
     timeFieldStrength,
     smokeStrength: smoke.strength,
     smokeParticleCount: smoke.particleCount,
+    smokeRearParticleCount: smoke.rearParticleCount,
+    smokeFrontParticleCount: smoke.frontParticleCount,
     smokeMaxParticles: smoke.maxParticles,
     smokeRenderer: smoke.renderer,
+    smokeFrontLayer: smoke.frontLayer,
+    smokeRearLayer: smoke.rearLayer,
     smokeContract: smoke.contract,
     contract: 'approaching-skewed-interactive-billboard-v3',
   };
