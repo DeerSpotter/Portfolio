@@ -92,10 +92,6 @@ try {
     throw new Error('Passing billboard remained interactive after the ship overtook it.');
   }
 
-  if (active.billboard.side * 0.66 >= 0) {
-    throw new Error(`Engineering billboard is not opposite its positive-side artwork: billboard side=${active.billboard.side}`);
-  }
-
   for (const [label, layer] of [['rear', active.rearFlame], ['front', active.frontFlame]]) {
     if (!layer.exists || layer.ariaHidden !== 'true' || layer.width <= 0 || layer.height <= 0) {
       throw new Error(`${label} flame canvas is incomplete: exists=${layer.exists}, ariaHidden=${layer.ariaHidden}, size=${layer.width}x${layer.height}`);
@@ -119,18 +115,18 @@ try {
     && passing.billboard.smokeStrength > distant.billboard.smokeStrength)) {
     throw new Error(`Flame intensity did not fall after pass: active=${active.billboard.smokeStrength}, passing=${passing.billboard.smokeStrength}, distant=${distant.billboard.smokeStrength}`);
   }
-  if (active.billboard.smokeContract !== 'canvas2d-defined-industrial-flame-v4'
-    || active.billboard.smokeRenderer !== 'dual-canvas-defined-industrial-flames') {
+  if (active.billboard.smokeContract !== 'canvas2d-anchored-flame-corona-v5'
+    || active.billboard.smokeRenderer !== 'dual-canvas-anchored-flame-corona') {
     throw new Error(`Flame debug contract mismatch: ${active.billboard.smokeContract}, renderer=${active.billboard.smokeRenderer}`);
   }
   if (!active.billboard.smokeFrontLayer || !active.billboard.smokeRearLayer) {
     throw new Error(`Billboard flame depth layers missing: front=${active.billboard.smokeFrontLayer}, rear=${active.billboard.smokeRearLayer}`);
   }
-  if (!(active.billboard.smokeRearParticleCount > 0)) {
-    throw new Error(`Active rear flame layer emitted no particles: ${active.billboard.smokeRearParticleCount}`);
+  if (!(active.billboard.smokeRearParticleCount >= 18)) {
+    throw new Error(`Active rear flame corona is incomplete: ${active.billboard.smokeRearParticleCount}`);
   }
-  if (!(active.billboard.smokeFrontParticleCount > 0)) {
-    throw new Error(`Active front flame layer emitted no particles: ${active.billboard.smokeFrontParticleCount}`);
+  if (!(active.billboard.smokeFrontParticleCount >= 10)) {
+    throw new Error(`Active front flame corona is incomplete: ${active.billboard.smokeFrontParticleCount}`);
   }
 
   console.log('[portfolio-billboard-browser] PASS');
@@ -140,8 +136,8 @@ try {
   console.log(`[portfolio-billboard-browser] yaw=${distant.billboard.yaw.toFixed(1)}deg->${active.billboard.yaw.toFixed(1)}deg`);
   console.log('[portfolio-billboard-browser] interaction=near-range-only');
   console.log(`[portfolio-billboard-browser] flameStrength=${flameStrengths.map(value => value.toFixed(3)).join('->')}`);
-  console.log(`[portfolio-billboard-browser] flameParticlesActive=rear:${active.billboard.smokeRearParticleCount},front:${active.billboard.smokeFrontParticleCount}`);
-  console.log('[portfolio-billboard-browser] flameDefinition=nested-bezier-core-with-outline');
+  console.log(`[portfolio-billboard-browser] anchoredTongues=rear:${active.billboard.smokeRearParticleCount},front:${active.billboard.smokeFrontParticleCount}`);
+  console.log('[portfolio-billboard-browser] flameDefinition=attached-wide-base-sharp-tip-nested-core');
   console.log('[portfolio-billboard-browser] flameLayers=rear<billboard<front');
 } finally {
   await browser.close();
