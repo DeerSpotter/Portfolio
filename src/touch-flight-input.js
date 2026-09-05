@@ -1,14 +1,14 @@
 // Touch devices do not emit the wheel-edge gesture used by desktop flight.
-// Keep touch interpretation separate from loop state: this adapter reports a
-// semantic flight-loop intent, while canvas-flight remains the single owner of
-// loopCycle, scroll recycling, travel continuity, and telemetry.
+// Keep touch interpretation separate from flight state: this adapter reports
+// semantic intent, while canvas-flight remains the sole owner of travel,
+// loopCycle, seam animation, and the final scroll-position synchronization.
 const EDGE_PX = 3;
 const MIN_GESTURE_PX = 18;
 const LOOP_INTENT_EVENT = 'portfolio-flight-loop-intent';
+const SEAM_ASSIST_EVENT = 'portfolio-flight-seam-assist';
+const SEAM_ASSIST_COMPLETE_EVENT = 'portfolio-flight-seam-assist-complete';
 const BLOCKED_SWIPE_SELECTOR = 'dialog, button, a, input, textarea, select, [contenteditable="true"]';
 const SEAM_ENTRY_PROGRESS = 0.93;
-const SEAM_EXIT_PROGRESS = 0.08;
-const SEAM_ASSIST_DURATION_MS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 520 : 760;
 
 let startY = null;
 let lastY = null;
@@ -16,7 +16,7 @@ let travelY = 0;
 let blocked = false;
 let deliveredDuringGesture = false;
 let seamAssistActive = false;
-let manualAfterAssist = false;
+let gestureConsumed = false;
 
 function resetGesture() {
   startY = null;
@@ -24,7 +24,7 @@ function resetGesture() {
   travelY = 0;
   blocked = false;
   deliveredDuringGesture = false;
-  manualAfterAssist = false;
+  gestureConsumed = false;
 }
 
 function scrollMetrics() {
@@ -48,55 +48,16 @@ function sendLoopIntent(direction) {
   }));
 }
 
-function easeInOutCubic(t) {
-  return t < 0.5
-    ? 4 * t * t * t
-    : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-function startForwardSeamAssist() {
-  if (seamAssistActive) return false;
-
-  const { maxScroll, local } = scrollMetrics();
-  if (local < SEAM_ENTRY_PROGRESS) return false;
+function requestForwardSeamAssist() {
+  if (seamAssistActive || gestureConsumed) return false;
+  if (scrollMetrics().local < SEAM_ENTRY_PROGRESS) return false;
 
   seamAssistActive = true;
-  manualAfterAssist = false;
+  gestureConsumed = true;
   deliveredDuringGesture = true;
-
-  const startProgress = local;
-  const totalProgress = 1 + SEAM_EXIT_PROGRESS - startProgress;
-  const startedAt = performance.now();
-  let wrapped = false;
-
-  function advance(now) {
-    const elapsed = Math.max(0, now - startedAt);
-    const t = Math.min(1, elapsed / SEAM_ASSIST_DURATION_MS);
-    const unwrappedProgress = startProgress + totalProgress * easeInOutCubic(t);
-
-    if (unwrappedProgress < 1) {
-      scrollTo(0, maxScroll * unwrappedProgress);
-    } else {
-      if (!wrapped) {
-        scrollTo(0, maxScroll);
-        sendLoopIntent(1);
-        wrapped = true;
-      }
-      scrollTo(0, maxScroll * Math.min(SEAM_EXIT_PROGRESS, unwrappedProgress - 1));
-    }
-
-    if (t < 1) {
-      requestAnimationFrame(advance);
-      return;
-    }
-
-    scrollTo(0, maxScroll * SEAM_EXIT_PROGRESS);
-    seamAssistActive = false;
-    manualAfterAssist = startY !== null;
-    travelY = 0;
-  }
-
-  requestAnimationFrame(advance);
+  dispatchEvent(new CustomEvent(SEAM_ASSIST_EVENT, {
+    detail: { direction: 1 },
+  }));
   return true;
 }
 
@@ -104,7 +65,7 @@ function deliverActiveGesture() {
   if (blocked || deliveredDuringGesture || startY === null || Math.abs(travelY) < MIN_GESTURE_PX) return false;
 
   const direction = Math.sign(travelY);
-  if (direction > 0 && startForwardSeamAssist()) return true;
+  if (direction > 0 && requestForwardSeamAssist()) return true;
   if (!documentEdge(direction)) return false;
 
   deliveredDuringGesture = true;
@@ -113,7 +74,7 @@ function deliverActiveGesture() {
 }
 
 function deliverCompletedGesture(direction) {
-  if (direction > 0 && startForwardSeamAssist()) return;
+  if (direction > 0 && requestForwardSeamAssist()) return;
 
   if (documentEdge(direction)) {
     sendLoopIntent(direction);
@@ -127,6 +88,14 @@ function deliverCompletedGesture(direction) {
   });
 }
 
+addEventListener(SEAM_ASSIST_COMPLETE_EVENT, () => {
+  seamAssistActive = false;
+  // Once preventDefault has claimed a Safari touch transaction, do not try to
+  // restart native scrolling inside that same finger-down gesture. Keep this
+  // gesture consumed until release; the next swipe is normal native control.
+  travelY = 0;
+});
+
 addEventListener('touchstart', event => {
   const touch = event.touches[0];
   if (!touch) return;
@@ -135,7 +104,7 @@ addEventListener('touchstart', event => {
   lastY = touch.clientY;
   travelY = 0;
   deliveredDuringGesture = false;
-  manualAfterAssist = false;
+  gestureConsumed = false;
 }, { passive: true });
 
 addEventListener('touchmove', event => {
@@ -146,21 +115,15 @@ addEventListener('touchmove', event => {
   const deltaY = lastY - touch.clientY;
   lastY = touch.clientY;
 
-  if (seamAssistActive) {
+  if (seamAssistActive || gestureConsumed) {
     event.preventDefault();
-    return;
-  }
-
-  if (manualAfterAssist) {
-    event.preventDefault();
-    scrollBy(0, deltaY);
     return;
   }
 
   travelY += deltaY;
   if (travelY > MIN_GESTURE_PX && scrollMetrics().local >= SEAM_ENTRY_PROGRESS) {
     event.preventDefault();
-    startForwardSeamAssist();
+    requestForwardSeamAssist();
     return;
   }
 
@@ -168,7 +131,7 @@ addEventListener('touchmove', event => {
 }, { passive: false });
 
 addEventListener('touchend', () => {
-  if (blocked || startY === null || seamAssistActive || manualAfterAssist || deliveredDuringGesture || Math.abs(travelY) < MIN_GESTURE_PX) {
+  if (blocked || startY === null || seamAssistActive || gestureConsumed || deliveredDuringGesture || Math.abs(travelY) < MIN_GESTURE_PX) {
     resetGesture();
     return;
   }
@@ -181,13 +144,12 @@ addEventListener('touchend', () => {
 addEventListener('touchcancel', resetGesture, { passive: true });
 
 window.__portfolioTouchFlightDebug = {
-  contract: 'touch-edge-to-flight-loop-v3',
+  contract: 'touch-edge-to-flight-loop-v4',
   edgePx: EDGE_PX,
   minimumGesturePx: MIN_GESTURE_PX,
-  delivery: 'active-gesture-edge-intent-with-touchend-fallback',
+  delivery: 'semantic-canvas-seam-assist',
   blockedSelector: BLOCKED_SWIPE_SELECTOR,
-  seamAssist: 'auto-06-through-01-v1',
+  seamAssist: 'canvas-owned-06-through-01-v2',
   seamEntryProgress: SEAM_ENTRY_PROGRESS,
-  seamExitProgress: SEAM_EXIT_PROGRESS,
-  seamAssistDurationMs: SEAM_ASSIST_DURATION_MS,
+  frameScrollWrites: 0,
 };
