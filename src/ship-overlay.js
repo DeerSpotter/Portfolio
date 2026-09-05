@@ -51,14 +51,16 @@ const route = new THREE.CatmullRomCurve3([
 
 const worldUp = new THREE.Vector3(0, 1, 0);
 const routePos = new THREE.Vector3();
-const smoothPos = new THREE.Vector3();
 const tangent = new THREE.Vector3();
-const smoothTangent = new THREE.Vector3(0, 0, -1);
 const curvatureProbe = new THREE.Vector3();
 const right = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
+const smoothLook = new THREE.Vector3();
+const targetEuler = new THREE.Euler();
+const targetQuaternion = new THREE.Quaternion();
 let poseInitialized = false;
+let smoothRoll = 0;
 
 function wrap01(value) {
   return ((value % 1) + 1) % 1;
@@ -107,26 +109,18 @@ function animate(now) {
   const speedSignal = Math.min(1, Math.abs(filteredVelocity) * 7.2);
   warpAmount = damp(warpAmount, reducedMotion ? 0 : speedSignal, coastAmount > 0.2 ? 3.4 : 5.8, dt);
 
+  // canvas-flight.js already smooths travel before publishing progress. Keep the
+  // 3D ship locked to that route position instead of damping the position a
+  // second time and making the ship visibly late.
   route.getPointAt(progress, routePos);
   route.getTangentAt(progress, tangent).normalize();
+  ship.position.copy(routePos);
 
-  if (!poseInitialized) {
-    smoothPos.copy(routePos);
-    smoothTangent.copy(tangent);
-    poseInitialized = true;
-  } else {
-    const positionLambda = 9.0 - coastAmount * 3.2 - timeFieldAmount * 1.4;
-    const tangentLambda = 7.5 - coastAmount * 2.6 - timeFieldAmount * 1.3;
-    smoothPos.lerp(routePos, 1 - Math.exp(-Math.max(3.2, positionLambda) * dt));
-    smoothTangent.lerp(tangent, 1 - Math.exp(-Math.max(2.8, tangentLambda) * dt)).normalize();
-  }
-
-  right.crossVectors(smoothTangent, worldUp).normalize();
+  right.crossVectors(tangent, worldUp).normalize();
   if (right.lengthSq() < 0.001) right.set(1, 0, 0);
 
-  ship.position.copy(smoothPos);
-  const yaw = Math.atan2(-smoothTangent.x, -smoothTangent.z);
-  const pitch = Math.asin(THREE.MathUtils.clamp(smoothTangent.y, -1, 1));
+  const yaw = Math.atan2(-tangent.x, -tangent.z);
+  const pitch = Math.asin(THREE.MathUtils.clamp(tangent.y, -1, 1));
   route.getTangentAt(wrap01(progress + 0.008), curvatureProbe).normalize();
   const turnSignal = right.dot(curvatureProbe) * -1;
   const coastCalm = Math.max(0.18, 1 - coastAmount * 0.45 - timeFieldAmount * 0.36);
@@ -136,10 +130,14 @@ function animate(now) {
     0.82,
   );
 
-  const attitudeLambda = Math.max(3.4, 8.5 - coastAmount * 3.2 - timeFieldAmount * 1.2);
-  ship.rotation.y = dampAngle(ship.rotation.y, yaw, attitudeLambda, dt);
-  ship.rotation.x = dampAngle(ship.rotation.x, -pitch * 0.86, attitudeLambda, dt);
-  ship.rotation.z = dampAngle(ship.rotation.z, targetRoll, Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount), dt);
+  // Smooth only the visual attitude. Quaternion interpolation removes Euler
+  // wrap/jump artifacts without changing where the ship is on the route.
+  smoothRoll = dampAngle(smoothRoll, targetRoll, reducedMotion ? 20 : 15, dt);
+  targetEuler.set(-pitch * 0.86, yaw, smoothRoll, ship.rotation.order);
+  targetQuaternion.setFromEuler(targetEuler);
+  const attitudeBlend = 1 - Math.exp(-(reducedMotion ? 24 : 18) * dt);
+  if (!poseInitialized) ship.quaternion.copy(targetQuaternion);
+  else ship.quaternion.slerp(targetQuaternion, attitudeBlend);
 
   setShipEngineState(ship, {
     thrust: warpAmount,
@@ -147,17 +145,22 @@ function animate(now) {
     time: reducedMotion ? 0 : now * 0.001,
   });
 
-  desiredCamera.copy(smoothPos)
-    .addScaledVector(smoothTangent, -11.6 - warpAmount * 5.5)
+  // Keep chase translation route-locked too. Only the look direction is eased,
+  // so the camera does not add another positional delay to the flight.
+  desiredCamera.copy(routePos)
+    .addScaledVector(tangent, -11.6 - warpAmount * 5.5)
     .addScaledVector(worldUp, 4.5 + warpAmount * 0.8)
     .addScaledVector(right, -ship.rotation.z * 0.92);
-  const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);
-  camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
+  camera.position.copy(desiredCamera);
 
-  desiredLook.copy(smoothPos)
-    .addScaledVector(smoothTangent, 13.5 + warpAmount * 12)
+  desiredLook.copy(routePos)
+    .addScaledVector(tangent, 13.5 + warpAmount * 12)
     .addScaledVector(worldUp, 0.35);
-  camera.lookAt(desiredLook);
+  if (!poseInitialized) smoothLook.copy(desiredLook);
+  else smoothLook.lerp(desiredLook, 1 - Math.exp(-(reducedMotion ? 24 : 18) * dt));
+  camera.lookAt(smoothLook);
+
+  poseInitialized = true;
 
   const fovLambda = Math.max(3.0, 6.2 - coastAmount * 1.8 - timeFieldAmount * 0.7);
   const nextFov = damp(camera.fov, 48 + warpAmount * 14, fovLambda, dt);
@@ -166,12 +169,17 @@ function animate(now) {
     camera.updateProjectionMatrix();
   }
 
+  const positionTrackingError = ship.position.distanceTo(routePos);
+  const cameraTrackingError = camera.position.distanceTo(desiredCamera);
+  const attitudeError = ship.quaternion.angleTo(targetQuaternion);
+
   window.__portfolioShipDebug = {
     ready: true,
     engine: 'three-overlay',
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
+    motionContract: 'route-locked-attitude-smoothed-v1',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -179,6 +187,9 @@ function animate(now) {
     warpAmount,
     coastAmount,
     timeFieldAmount,
+    positionTrackingError,
+    cameraTrackingError,
+    attitudeError,
     exhaust: 'turbulent-nozzle-rooted-shader-v1',
     engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
     ship: {
@@ -194,6 +205,9 @@ function animate(now) {
       y: camera.position.y,
       z: camera.position.z,
       fov: camera.fov,
+      lookX: smoothLook.x,
+      lookY: smoothLook.y,
+      lookZ: smoothLook.z,
     },
     backgroundRenderer: state.engine,
     movement: state.movement,
