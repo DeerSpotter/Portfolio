@@ -6,13 +6,14 @@ const billboard = document.querySelector('.detail');
 const action = document.getElementById('detailAction');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TAU = Math.PI * 2;
-const INTERACTION_HOLD_MS = 1800;
+const INTERACTION_HOLD_MS = 3500;
 const INTERACTION_FIELD_THRESHOLD = 0.72;
 
 let displayed = null;
 let lastState = '';
 let interactionHold = null;
 let interactionHoldUntil = 0;
+let interactionHoldConsumedStop = null;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -136,28 +137,37 @@ function captureInteractionHold(stop, screen, now) {
     skew: screen.skew,
   };
   interactionHoldUntil = now + INTERACTION_HOLD_MS;
+  interactionHoldConsumedStop = stop.title;
 }
 
 function heldScreen(stop, screen, pocket, timeFieldStrength, now) {
-  const shouldHold = !reducedMotion
+  const inInteractionZone = !reducedMotion
     && pocket?.mode === 'time-pocket'
     && screen.state === 'active'
     && screen.interactive
     && timeFieldStrength >= INTERACTION_FIELD_THRESHOLD;
 
-  const focusInside = billboard.matches(':hover') || billboard.contains(document.activeElement);
-  if (focusInside && interactionHold?.stopTitle === stop.title) {
-    interactionHoldUntil = Math.max(interactionHoldUntil, now + 300);
-  }
-
-  if (!shouldHold) {
+  if (!inInteractionZone) {
     interactionHold = null;
     interactionHoldUntil = 0;
+    if (interactionHoldConsumedStop !== stop.title) interactionHoldConsumedStop = null;
     return { screen, held: false };
   }
 
-  if (!interactionHold || interactionHold.stopTitle !== stop.title || now >= interactionHoldUntil) {
+  if (!interactionHold && interactionHoldConsumedStop !== stop.title) {
     captureInteractionHold(stop, screen, now);
+  }
+
+  if (!interactionHold || interactionHold.stopTitle !== stop.title) {
+    return { screen, held: false };
+  }
+
+  const focusInside = billboard.matches(':hover') || billboard.contains(document.activeElement);
+  if (focusInside) interactionHoldUntil = Math.max(interactionHoldUntil, now + 350);
+
+  if (now >= interactionHoldUntil && !focusInside) {
+    interactionHold = null;
+    return { screen, held: false };
   }
 
   return {
@@ -229,6 +239,7 @@ function render(now = performance.now()) {
     state: projected.state,
     interactive: projected.interactive || reducedMotion,
     interactionHold: hold.held,
+    interactionHoldConsumed: interactionHoldConsumedStop === stop.title,
     interactionHoldMs: INTERACTION_HOLD_MS,
     rel: projected.rel,
     depth: projected.t,
