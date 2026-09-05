@@ -2,19 +2,32 @@ import fs from 'node:fs';
 import { chromium } from 'playwright';
 
 const touchSource = fs.readFileSync('src/touch-flight-input.js', 'utf8');
+const canvasSource = fs.readFileSync('src/canvas-flight.js', 'utf8');
 for (const required of [
   "const LOOP_INTENT_EVENT = 'portfolio-flight-loop-intent';",
+  "const VIRTUAL_TRAVEL_EVENT = 'portfolio-flight-virtual-touch';",
+  'const VIRTUAL_ENTRY_PROGRESS = 0.93;',
+  'function beginVirtualTravel(deltaY)',
   'function deliverActiveGesture()',
   'function deliverCompletedGesture(direction)',
-  "new CustomEvent(LOOP_INTENT_EVENT",
-  "contract: 'touch-edge-to-flight-loop-v3'",
-  "delivery: 'active-gesture-edge-intent-with-touchend-fallback'",
+  "sendVirtualTravel('begin')",
+  "contract: 'touch-edge-to-flight-loop-v4'",
+  "delivery: 'pre-edge-virtual-travel-with-edge-fallback'",
   'BLOCKED_SWIPE_SELECTOR',
 ]) {
   if (!touchSource.includes(required)) throw new Error(`Touch flight contract missing: ${required}`);
 }
-for (const forbidden of ['new WheelEvent(', 'dispatchEvent(new WheelEvent']) {
-  if (touchSource.includes(forbidden)) throw new Error(`Touch flight must not synthesize desktop wheel input: ${forbidden}`);
+for (const required of [
+  'function beginVirtualTouchTravel()',
+  'function applyVirtualTouchDelta(deltaProgress)',
+  'function finishVirtualTouchTravel()',
+  "addEventListener('portfolio-flight-virtual-touch'",
+  "inputLoop: 'wheel-plus-virtual-touch-v3'",
+]) {
+  if (!canvasSource.includes(required)) throw new Error(`Canvas virtual-touch contract missing: ${required}`);
+}
+for (const forbidden of ['new WheelEvent(', 'dispatchEvent(new WheelEvent', 'scrollTo(', 'scrollBy(']) {
+  if (touchSource.includes(forbidden)) throw new Error(`Touch adapter must not manipulate the browser scroll transaction: ${forbidden}`);
 }
 if (touchSource.includes("closest('.detail")) {
   throw new Error('The flight billboard must remain a swipe surface; only actual controls/dialogs may block touch flight.');
@@ -193,80 +206,142 @@ try {
     throw new Error(`Reduced-motion field detached from projected card: center offset=${fieldOffset.toFixed(2)}px.`);
   }
   if (reduced.fieldComputedTransform === 'none') throw new Error('Reduced-motion procedural field lost its projected transform.');
-  if (reduced.touchInput?.contract !== 'touch-edge-to-flight-loop-v3'
-    || reduced.touchInput?.delivery !== 'active-gesture-edge-intent-with-touchend-fallback') {
+  if (reduced.touchInput?.contract !== 'touch-edge-to-flight-loop-v4'
+    || reduced.touchInput?.delivery !== 'pre-edge-virtual-travel-with-edge-fallback') {
     throw new Error(`Touch flight input adapter is missing: ${JSON.stringify(reduced.touchInput)}`);
+  }
+  if (reduced.touchInput?.virtualEntryProgress !== 0.93) {
+    throw new Error(`Virtual seam takeover moved away from the post-06 corridor: ${JSON.stringify(reduced.touchInput)}`);
   }
   if (reduced.touchInput?.blockedSelector?.includes('.detail')) {
     throw new Error(`Flight billboard is still blocked as a swipe surface: ${reduced.touchInput.blockedSelector}`);
   }
-  if (reduced.canvasInputLoop !== 'wheel-plus-semantic-touch-intent-v2') {
-    throw new Error(`Canvas flight does not own semantic touch recycle intent: ${reduced.canvasInputLoop}`);
+  if (reduced.canvasInputLoop !== 'wheel-plus-virtual-touch-v3') {
+    throw new Error(`Canvas flight does not own virtual touch travel: ${reduced.canvasInputLoop}`);
   }
 
-  // The reported iPhone failure happens before finger release: the native page
-  // reaches its hard lower boundary while the finger is still moving, and the
-  // ship parks there until touchend. Prove that reaching the edge on touchmove
-  // recycles immediately, even when the swipe starts on the billboard itself.
+  // The hard-wall regression is specifically a physical document-edge problem.
+  // Start BEFORE that edge, at 94% of the lap. Once the held upward gesture is
+  // captured, logical flight must cross into the next lap while scrollY remains
+  // parked at the pre-edge position. Only touchend may rebase the document.
   await reducedPage.locator('[data-stop="5"]').click();
   await reducedPage.waitForFunction(() => window.__portfolioCanvasDebug?.activeStop === 'Clarity');
-  await reducedPage.evaluate(() => {
-    window.scrollTo(0, document.documentElement.scrollHeight - innerHeight);
+  const seamSetup = await reducedPage.evaluate(() => {
+    const maxScroll = document.documentElement.scrollHeight - innerHeight;
+    window.scrollTo(0, maxScroll * 0.94);
     window.__portfolioTestWheelEvents = 0;
     addEventListener('wheel', () => { window.__portfolioTestWheelEvents += 1; });
+    return { maxScroll };
   });
-  await reducedPage.waitForTimeout(100);
-  const beforeTouchLoop = await reducedPage.evaluate(() => window.__portfolioCanvasDebug.loopCycle);
+  await reducedPage.waitForTimeout(120);
+  const beforeVirtual = await reducedPage.evaluate(() => ({
+    loopCycle: window.__portfolioCanvasDebug.loopCycle,
+    targetTravel: window.__portfolioCanvasDebug.targetTravel,
+    travel: window.__portfolioCanvasDebug.travel,
+    y: scrollY,
+  }));
 
-  await reducedPage.evaluate(() => {
+  const firstMove = await reducedPage.evaluate(maxScroll => {
     const surface = document.querySelector('.detail');
-    const touchEvent = (type, y = null) => {
+    let y = 600;
+    const touchEvent = (type, nextY = null) => {
       const event = new Event(type, { bubbles: true, cancelable: true });
-      Object.defineProperty(event, 'touches', { value: y === null ? [] : [{ clientY: y }] });
+      Object.defineProperty(event, 'touches', { value: nextY === null ? [] : [{ clientY: nextY }] });
       surface.dispatchEvent(event);
+      return event.defaultPrevented;
     };
-    window.__portfolioFinishTestTouch = () => touchEvent('touchend');
-    touchEvent('touchstart', 320);
-    touchEvent('touchmove', 235);
-  });
+    window.__portfolioTouchTest = {
+      moveBy(deltaPixels) {
+        y -= deltaPixels;
+        return touchEvent('touchmove', y);
+      },
+      end() {
+        return touchEvent('touchend');
+      },
+    };
+    touchEvent('touchstart', y);
+    return window.__portfolioTouchTest.moveBy(maxScroll * 0.12);
+  }, seamSetup.maxScroll);
+  if (!firstMove) throw new Error('Pre-edge virtual takeover did not prevent the native touchmove transaction.');
 
-  await reducedPage.waitForFunction(before => window.__portfolioCanvasDebug.loopCycle >= before + 1, beforeTouchLoop, { timeout: 1000 });
-  const duringTouchLoop = await reducedPage.evaluate(() => ({
+  await reducedPage.waitForFunction(
+    cycle => window.__portfolioCanvasDebug?.virtualTouchActive
+      && window.__portfolioCanvasDebug?.targetTravel > cycle + 1.04,
+    beforeVirtual.loopCycle,
+    { timeout: 1000 },
+  );
+  await reducedPage.waitForFunction(
+    cycle => window.__portfolioCanvasDebug?.travel > cycle + 1.01,
+    beforeVirtual.loopCycle,
+    { timeout: 1500 },
+  );
+
+  const heldAcrossSeam = await reducedPage.evaluate(() => ({
     loopCycle: window.__portfolioCanvasDebug.loopCycle,
+    targetTravel: window.__portfolioCanvasDebug.targetTravel,
+    travel: window.__portfolioCanvasDebug.travel,
     progress: window.__portfolioCanvasDebug.progress,
+    virtualTouchActive: window.__portfolioCanvasDebug.virtualTouchActive,
     y: scrollY,
+    maxScroll: document.documentElement.scrollHeight - innerHeight,
     wheelEvents: window.__portfolioTestWheelEvents,
   }));
-  if (duringTouchLoop.wheelEvents !== 0) {
-    throw new Error(`Active touch loop remapped through synthetic wheel input: ${JSON.stringify(duringTouchLoop)}`);
+  if (!heldAcrossSeam.virtualTouchActive) {
+    throw new Error(`Virtual seam control released before the finger did: ${JSON.stringify(heldAcrossSeam)}`);
   }
-  if (duringTouchLoop.loopCycle !== beforeTouchLoop + 1) {
-    throw new Error(`Active swipe did not recycle exactly once before release: ${JSON.stringify(duringTouchLoop)}`);
+  if (heldAcrossSeam.loopCycle !== beforeVirtual.loopCycle + 1 || heldAcrossSeam.progress >= 0.20) {
+    throw new Error(`Held swipe did not visibly cross 06 -> 01: ${JSON.stringify(heldAcrossSeam)}`);
   }
-  if (duringTouchLoop.y > 12) {
-    throw new Error(`Active swipe did not recycle away from the document boundary: ${JSON.stringify(duringTouchLoop)}`);
+  if (Math.abs(heldAcrossSeam.y - beforeVirtual.y) > 2) {
+    throw new Error(`Browser scroll moved while virtual seam travel was active: before=${beforeVirtual.y}, during=${heldAcrossSeam.y}`);
+  }
+  if (heldAcrossSeam.wheelEvents !== 0) {
+    throw new Error(`Virtual seam travel remapped through wheel input: ${JSON.stringify(heldAcrossSeam)}`);
   }
 
-  await reducedPage.evaluate(() => {
-    window.__portfolioFinishTestTouch();
-    delete window.__portfolioFinishTestTouch;
-  });
-  await reducedPage.waitForTimeout(250);
-  const afterTouchLoop = await reducedPage.evaluate(() => ({
+  const targetBeforeContinuation = heldAcrossSeam.targetTravel;
+  const continuationPrevented = await reducedPage.evaluate(maxScroll => (
+    window.__portfolioTouchTest.moveBy(maxScroll * 0.035)
+  ), seamSetup.maxScroll);
+  if (!continuationPrevented) throw new Error('Same held finger stopped being owned after crossing the seam.');
+  await reducedPage.waitForFunction(
+    before => window.__portfolioCanvasDebug?.targetTravel > before + 0.03,
+    targetBeforeContinuation,
+    { timeout: 1000 },
+  );
+  const sameFingerContinuation = await reducedPage.evaluate(() => ({
+    targetTravel: window.__portfolioCanvasDebug.targetTravel,
+    y: scrollY,
+    virtualTouchActive: window.__portfolioCanvasDebug.virtualTouchActive,
+  }));
+  if (!sameFingerContinuation.virtualTouchActive || Math.abs(sameFingerContinuation.y - beforeVirtual.y) > 2) {
+    throw new Error(`Same finger did not continue cleanly in virtual travel: ${JSON.stringify(sameFingerContinuation)}`);
+  }
+
+  await reducedPage.evaluate(() => window.__portfolioTouchTest.end());
+  await reducedPage.waitForFunction(() => window.__portfolioCanvasDebug?.virtualTouchActive === false, null, { timeout: 1000 });
+  await reducedPage.waitForTimeout(80);
+  const afterVirtual = await reducedPage.evaluate(() => ({
     loopCycle: window.__portfolioCanvasDebug.loopCycle,
+    targetTravel: window.__portfolioCanvasDebug.targetTravel,
+    travel: window.__portfolioCanvasDebug.travel,
     progress: window.__portfolioCanvasDebug.progress,
     y: scrollY,
+    maxScroll: document.documentElement.scrollHeight - innerHeight,
     wheelEvents: window.__portfolioTestWheelEvents,
   }));
-  if (afterTouchLoop.loopCycle !== beforeTouchLoop + 1) {
-    throw new Error(`Releasing the same swipe caused a duplicate recycle: ${JSON.stringify(afterTouchLoop)}`);
+  const expectedLocal = ((afterVirtual.targetTravel % 1) + 1) % 1;
+  const actualLocal = afterVirtual.y / Math.max(1, afterVirtual.maxScroll);
+  if (Math.abs(actualLocal - expectedLocal) > 0.012) {
+    throw new Error(`Touch release did not rebase once to the equivalent next-lap position: expected=${expectedLocal}, actual=${actualLocal}`);
   }
-  if (afterTouchLoop.wheelEvents !== 0) {
-    throw new Error(`Touch release emitted a synthetic wheel event: ${JSON.stringify(afterTouchLoop)}`);
+  if (afterVirtual.loopCycle !== beforeVirtual.loopCycle + 1) {
+    throw new Error(`Touch release changed the lap count unexpectedly: ${JSON.stringify(afterVirtual)}`);
   }
-  if (afterTouchLoop.progress > 0.10) {
-    throw new Error(`Mobile flight did not continue into the start corridor after active-swipe recycle: ${JSON.stringify(afterTouchLoop)}`);
+  if (afterVirtual.wheelEvents !== 0) {
+    throw new Error(`Touch release emitted synthetic wheel input: ${JSON.stringify(afterVirtual)}`);
   }
+  await reducedPage.evaluate(() => { delete window.__portfolioTouchTest; });
   await reducedPage.close();
 
   console.log('[portfolio-mobile] PASS');
@@ -274,7 +349,7 @@ try {
   console.log('[portfolio-mobile] ios-text-inflation=disabled');
   console.log('[portfolio-mobile] reduced-motion=side-projected-reading-plane');
   console.log('[portfolio-mobile] billboard-action=compact-inline-link');
-  console.log('[portfolio-mobile] touch-loop=active-swipe-recycle-before-release');
+  console.log('[portfolio-mobile] touch-loop=pre-edge-virtual-travel-no-wall');
   console.log('[portfolio-mobile] billboard=valid-flight-swipe-surface');
   console.log('[portfolio-mobile] content=present-not-hidden');
   console.log('[portfolio-mobile] destination=compact-flight-corridor');
