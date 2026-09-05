@@ -80,8 +80,28 @@ try {
     throw new Error(`Ship did not enter animated idle thrust: coast=${coast.ship.coastAmount}, state=${coast.ship.engineState}.`);
   }
 
-  // Real user input must immediately leave the time pocket and return control
-  // to the visitor; coast strength can decay smoothly afterward.
+  // A deliberate backwards waypoint jump must replace the latch immediately.
+  // The old stop must not flash while the destination settles.
+  await page.locator('[data-stop="0"]').click();
+  await page.waitForFunction(() => (
+    window.__portfolioTimePocketDebug?.lockedStop === 'Start here'
+    && window.__portfolioBillboardDebug?.stop === 'Start here'
+    && document.querySelector('[data-stop="0"]')?.getAttribute('aria-current') === 'step'
+  ), null, { timeout: 3000 });
+
+  const reverseJump = await page.evaluate(() => ({
+    locked: window.__portfolioTimePocketDebug.lockedStop,
+    billboard: window.__portfolioBillboardDebug.stop,
+    current: document.querySelector('[data-stop][aria-current="step"]')?.dataset.stop,
+  }));
+  if (reverseJump.locked !== 'Start here' || reverseJump.billboard !== 'Start here' || reverseJump.current !== '0') {
+    throw new Error(`Backward waypoint jump retained stale focus: ${JSON.stringify(reverseJump)}`);
+  }
+
+  // Return to Engineering, then prove real wheel input exits slow motion.
+  await page.locator('[data-stop="1"]').click();
+  await page.waitForFunction(() => window.__portfolioTimePocketDebug?.lockedStop === 'Engineering', null, { timeout: 3000 });
+  await page.waitForFunction(() => window.__portfolioTimePocketDebug?.mode === 'time-pocket', null, { timeout: 3000 });
   await page.mouse.wheel(0, 600);
   await page.waitForFunction(() => window.__portfolioTimePocketDebug?.mode === 'flight', null, { timeout: 1000 });
   const resumed = await page.evaluate(() => ({
@@ -95,6 +115,7 @@ try {
   console.log(`[portfolio-time-pocket-browser] progress=${driftProgress.toFixed(5)}`);
   console.log(`[portfolio-time-pocket-browser] shipDrift=${shipDrift.toFixed(3)}`);
   console.log('[portfolio-time-pocket-browser] focus=Engineering-latched');
+  console.log('[portfolio-time-pocket-browser] reverseJump=immediate-reacquire');
   console.log('[portfolio-time-pocket-browser] interaction=active-during-slow-pass');
   console.log('[portfolio-time-pocket-browser] engine=idle-drift-animated');
   console.log('[portfolio-time-pocket-browser] resume=user-wheel-releases-pocket');
