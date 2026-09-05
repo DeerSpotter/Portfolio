@@ -301,8 +301,14 @@ function animate(now) {
   const cameraFollowAlpha = THREE.MathUtils.lerp(normalCameraAlpha, 1, cameraSeamBlend);
   camera.position.lerp(desiredCamera, cameraFollowAlpha);
 
+  // The camera position was already ship-relative at the seam, but the old
+  // forward look target still swung across the ship as the route reversed.
+  // Collapse that cinematic lead to the ship while seam lock is active, then
+  // restore it smoothly after 01 clears. This removes the remaining screen-space
+  // lateral sweep without changing the route, ship pose, or normal chase flight.
+  const seamLookAhead = (13.5 + warpAmount * 12) * (1 - cameraSeamBlend);
   desiredLook.copy(smoothPos)
-    .addScaledVector(cameraForward, 13.5 + warpAmount * 12)
+    .addScaledVector(cameraForward, seamLookAhead)
     .addScaledVector(worldUp, 0.35);
   camera.lookAt(desiredLook);
 
