@@ -37,7 +37,12 @@ addEventListener('portfolio:waypoint-navigation', event => {
 });
 
 function resumeFlight(event) {
-  if (event.target instanceof Element && event.target.closest('.detail, dialog, button, a')) return;
+  if (event.target instanceof Element) {
+    if (event.target.closest('.detail, dialog')) return;
+    // Button clicks select destinations; wheel/keyboard travel over the HUD
+    // still releases the reading anchor.
+    if (event.type === 'pointerdown' && event.target.closest('button, a')) return;
+  }
   if (event.type === 'keydown' && !['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) return;
   if (navigationPose || focusPose) releasePose = { ...(navigationPose || focusPose), started: performance.now() };
   navigationStop = null;

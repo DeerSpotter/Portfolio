@@ -185,3 +185,10 @@ facility animation continue. Explicit flight input outside the billboard
 releases the anchor; selecting another waypoint replaces it. This fixes the
 reported `#detailAction` stability timeout without forced clicks or longer test
 timeouts. No local tests were run for this correction.
+
+Slow-pass mode now remains active during a reading anchor; only automatic
+forward travel pauses. The debug state reports `readingHold` and `advancing`
+separately. Wheel/keyboard travel over waypoint controls releases the anchor,
+and real user input bypasses the synthetic-scroll guard. This corrects the
+slow-pass timeout at `verify-time-pocket-browser.mjs:124` without changing its
+assertion or timeout. No local tests were run.
