@@ -8,7 +8,8 @@ const LOCK_ACQUIRE_DISTANCE = 0.10;
 
 let lastUserInputTime = performance.now();
 let lastTime = performance.now();
-let syntheticScroll = false;
+let syntheticScrollUntil = 0;
+let coastCarry = 0;
 let lockedStop = null;
 let mode = 'flight';
 let coastStrength = 0;
@@ -31,8 +32,10 @@ function nearestStop(progress) {
 }
 
 function noteUserInput() {
-  if (syntheticScroll) return;
-  lastUserInputTime = performance.now();
+  const now = performance.now();
+  if (now < syntheticScrollUntil) return;
+  lastUserInputTime = now;
+  coastCarry = 0;
   mode = 'flight';
 }
 
@@ -58,6 +61,20 @@ function updateLock(progress) {
   }
 }
 
+function advanceCoast(dt) {
+  const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const remaining = maxScroll - scrollY;
+  if (remaining <= 4) return;
+
+  coastCarry += COAST_RATE_PX_PER_SECOND * dt;
+  if (coastCarry < 0.5) return;
+
+  const distance = Math.min(remaining, coastCarry);
+  coastCarry = 0;
+  syntheticScrollUntil = performance.now() + 90;
+  scrollBy(0, distance);
+}
+
 function animate(now) {
   const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
   lastTime = now;
@@ -76,15 +93,7 @@ function animate(now) {
   const targetCoast = canCoast ? 1 : 0;
   coastStrength += (targetCoast - coastStrength) * (1 - Math.exp(-4.4 * dt));
 
-  if (canCoast) {
-    const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
-    const remaining = maxScroll - scrollY;
-    if (remaining > 4) {
-      syntheticScroll = true;
-      scrollBy(0, Math.min(remaining, COAST_RATE_PX_PER_SECOND * dt));
-      requestAnimationFrame(() => { syntheticScroll = false; });
-    }
-  }
+  if (canCoast) advanceCoast(dt);
 
   const relativeDistance = lockedStop ? wrapSigned(lockedStop.at - flight.progress) : null;
   window.__portfolioTimePocketDebug = {
