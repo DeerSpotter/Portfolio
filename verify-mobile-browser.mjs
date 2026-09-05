@@ -4,15 +4,20 @@ import { chromium } from 'playwright';
 const touchSource = fs.readFileSync('src/touch-flight-input.js', 'utf8');
 for (const required of [
   "const LOOP_INTENT_EVENT = 'portfolio-flight-loop-intent';",
+  'function deliverActiveGesture()',
   'function deliverCompletedGesture(direction)',
   "new CustomEvent(LOOP_INTENT_EVENT",
-  "contract: 'touch-edge-to-flight-loop-v2'",
-  "delivery: 'semantic-intent-after-scroll-settle'",
+  "contract: 'touch-edge-to-flight-loop-v3'",
+  "delivery: 'active-gesture-edge-intent-with-touchend-fallback'",
+  'BLOCKED_SWIPE_SELECTOR',
 ]) {
   if (!touchSource.includes(required)) throw new Error(`Touch flight contract missing: ${required}`);
 }
 for (const forbidden of ['new WheelEvent(', 'dispatchEvent(new WheelEvent']) {
   if (touchSource.includes(forbidden)) throw new Error(`Touch flight must not synthesize desktop wheel input: ${forbidden}`);
+}
+if (touchSource.includes("closest('.detail")) {
+  throw new Error('The flight billboard must remain a swipe surface; only actual controls/dialogs may block touch flight.');
 }
 
 const url = process.env.PORTFOLIO_URL || 'http://127.0.0.1:8231/';
@@ -188,59 +193,79 @@ try {
     throw new Error(`Reduced-motion field detached from projected card: center offset=${fieldOffset.toFixed(2)}px.`);
   }
   if (reduced.fieldComputedTransform === 'none') throw new Error('Reduced-motion procedural field lost its projected transform.');
-  if (reduced.touchInput?.contract !== 'touch-edge-to-flight-loop-v2'
-    || reduced.touchInput?.delivery !== 'semantic-intent-after-scroll-settle') {
+  if (reduced.touchInput?.contract !== 'touch-edge-to-flight-loop-v3'
+    || reduced.touchInput?.delivery !== 'active-gesture-edge-intent-with-touchend-fallback') {
     throw new Error(`Touch flight input adapter is missing: ${JSON.stringify(reduced.touchInput)}`);
+  }
+  if (reduced.touchInput?.blockedSelector?.includes('.detail')) {
+    throw new Error(`Flight billboard is still blocked as a swipe surface: ${reduced.touchInput.blockedSelector}`);
   }
   if (reduced.canvasInputLoop !== 'wheel-plus-semantic-touch-intent-v2') {
     throw new Error(`Canvas flight does not own semantic touch recycle intent: ${reduced.canvasInputLoop}`);
   }
 
-  // Reproduce the Safari ordering behind the reported stuck transition: the
-  // completed touch arrives while scrollY is still just short of the boundary,
-  // then the browser commits the final scroll position before the next frame.
-  // One gesture must recycle, and no synthetic wheel event may be involved.
+  // The reported iPhone failure happens before finger release: the native page
+  // reaches its hard lower boundary while the finger is still moving, and the
+  // ship parks there until touchend. Prove that reaching the edge on touchmove
+  // recycles immediately, even when the swipe starts on the billboard itself.
   await reducedPage.locator('[data-stop="5"]').click();
   await reducedPage.waitForFunction(() => window.__portfolioCanvasDebug?.activeStop === 'Clarity');
   await reducedPage.evaluate(() => {
-    const max = document.documentElement.scrollHeight - innerHeight;
-    window.scrollTo(0, Math.max(0, max - 40));
+    window.scrollTo(0, document.documentElement.scrollHeight - innerHeight);
     window.__portfolioTestWheelEvents = 0;
     addEventListener('wheel', () => { window.__portfolioTestWheelEvents += 1; });
   });
   await reducedPage.waitForTimeout(100);
   const beforeTouchLoop = await reducedPage.evaluate(() => window.__portfolioCanvasDebug.loopCycle);
+
   await reducedPage.evaluate(() => {
+    const surface = document.querySelector('.detail');
     const touchEvent = (type, y = null) => {
       const event = new Event(type, { bubbles: true, cancelable: true });
       Object.defineProperty(event, 'touches', { value: y === null ? [] : [{ clientY: y }] });
-      dispatchEvent(event);
+      surface.dispatchEvent(event);
     };
+    window.__portfolioFinishTestTouch = () => touchEvent('touchend');
     touchEvent('touchstart', 320);
     touchEvent('touchmove', 235);
-    touchEvent('touchend');
-
-    // Model Safari committing the native scroll after touchend but before the
-    // adapter's next-frame edge check.
-    window.scrollTo(0, document.documentElement.scrollHeight - innerHeight);
   });
-  await reducedPage.waitForFunction(before => window.__portfolioCanvasDebug.loopCycle >= before + 1, beforeTouchLoop, { timeout: 3000 });
-  await reducedPage.waitForTimeout(700);
-  const touchLoop = await reducedPage.evaluate(() => ({
+
+  await reducedPage.waitForFunction(before => window.__portfolioCanvasDebug.loopCycle >= before + 1, beforeTouchLoop, { timeout: 1000 });
+  const duringTouchLoop = await reducedPage.evaluate(() => ({
     loopCycle: window.__portfolioCanvasDebug.loopCycle,
     progress: window.__portfolioCanvasDebug.progress,
-    activeStop: window.__portfolioCanvasDebug.activeStop,
     y: scrollY,
     wheelEvents: window.__portfolioTestWheelEvents,
   }));
-  if (touchLoop.wheelEvents !== 0) {
-    throw new Error(`Touch loop still remaps through synthetic wheel input: ${JSON.stringify(touchLoop)}`);
+  if (duringTouchLoop.wheelEvents !== 0) {
+    throw new Error(`Active touch loop remapped through synthetic wheel input: ${JSON.stringify(duringTouchLoop)}`);
   }
-  if (touchLoop.loopCycle !== beforeTouchLoop + 1) {
-    throw new Error(`One completed swipe recycled more than once: ${JSON.stringify(touchLoop)}`);
+  if (duringTouchLoop.loopCycle !== beforeTouchLoop + 1) {
+    throw new Error(`Active swipe did not recycle exactly once before release: ${JSON.stringify(duringTouchLoop)}`);
   }
-  if (touchLoop.y > 12 || touchLoop.progress > 0.10) {
-    throw new Error(`One mobile swipe did not return flight to the start corridor: ${JSON.stringify(touchLoop)}`);
+  if (duringTouchLoop.y > 12) {
+    throw new Error(`Active swipe did not recycle away from the document boundary: ${JSON.stringify(duringTouchLoop)}`);
+  }
+
+  await reducedPage.evaluate(() => {
+    window.__portfolioFinishTestTouch();
+    delete window.__portfolioFinishTestTouch;
+  });
+  await reducedPage.waitForTimeout(250);
+  const afterTouchLoop = await reducedPage.evaluate(() => ({
+    loopCycle: window.__portfolioCanvasDebug.loopCycle,
+    progress: window.__portfolioCanvasDebug.progress,
+    y: scrollY,
+    wheelEvents: window.__portfolioTestWheelEvents,
+  }));
+  if (afterTouchLoop.loopCycle !== beforeTouchLoop + 1) {
+    throw new Error(`Releasing the same swipe caused a duplicate recycle: ${JSON.stringify(afterTouchLoop)}`);
+  }
+  if (afterTouchLoop.wheelEvents !== 0) {
+    throw new Error(`Touch release emitted a synthetic wheel event: ${JSON.stringify(afterTouchLoop)}`);
+  }
+  if (afterTouchLoop.progress > 0.10) {
+    throw new Error(`Mobile flight did not continue into the start corridor after active-swipe recycle: ${JSON.stringify(afterTouchLoop)}`);
   }
   await reducedPage.close();
 
@@ -249,7 +274,8 @@ try {
   console.log('[portfolio-mobile] ios-text-inflation=disabled');
   console.log('[portfolio-mobile] reduced-motion=side-projected-reading-plane');
   console.log('[portfolio-mobile] billboard-action=compact-inline-link');
-  console.log('[portfolio-mobile] touch-loop=one-swipe-semantic-intent-after-scroll-settle');
+  console.log('[portfolio-mobile] touch-loop=active-swipe-recycle-before-release');
+  console.log('[portfolio-mobile] billboard=valid-flight-swipe-surface');
   console.log('[portfolio-mobile] content=present-not-hidden');
   console.log('[portfolio-mobile] destination=compact-flight-corridor');
 } finally {
