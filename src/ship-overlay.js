@@ -319,6 +319,10 @@ function animate(now) {
     camera.updateProjectionMatrix();
   }
 
+  // Project against the same camera transform that this frame will render.
+  // Without this explicit update, Vector3.project() can observe the previous
+  // frame's matrixWorldInverse after camera.position/lookAt changed above.
+  camera.updateMatrixWorld();
   shipScreenProbe.copy(ship.position).project(camera);
   const shipScreenX = (shipScreenProbe.x * 0.5 + 0.5) * window.innerWidth;
   const shipScreenY = (-shipScreenProbe.y * 0.5 + 0.5) * window.innerHeight;
