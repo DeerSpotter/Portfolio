@@ -27,21 +27,28 @@ for (const removed of ['const planets =', 'function drawPlanet(', 'function draw
   }
 }
 
-if (!canvas.includes("const SCENERY_CONTRACT = 'layered-side-scenes-v1'")) {
-  throw new Error('Layered side scenery contract is missing.');
+for (const required of [
+  "const SCENERY_CONTRACT = 'art-directed-flight-stations-v2'",
+  "artDirection: 'hero-station-plus-supporting-silhouettes'",
+  'function drawStationCompanion(',
+  'function stationShadow(',
+  "if (stop.role !== 'hero')",
+  "role: 'lead'",
+  "role: 'hero'",
+  "role: 'trail'",
+  'const scaleX = scaleY *',
+  "lateralPerspective: 'accelerated-side-growth'",
+]) {
+  if (!canvas.includes(required)) throw new Error(`Art-direction contract missing: ${required}`);
 }
-if (!canvas.includes("lateralPerspective: 'accelerated-side-growth'")) {
-  throw new Error('Accelerated lateral growth contract is missing.');
-}
-if (!canvas.includes("role: 'lead'") || !canvas.includes("role: 'hero'") || !canvas.includes("role: 'trail'")) {
-  throw new Error('Each waypoint must retain lead, hero, and trail depth layers.');
-}
-if (!canvas.includes('const scaleX = scaleY *')) {
-  throw new Error('Sideways growth must be independent from vertical scene scale.');
+
+if (!canvas.includes('drawStationCompanion(stop)')) {
+  throw new Error('Lead/trail scenery no longer uses dedicated companion silhouettes.');
 }
 
 console.log('[portfolio-scenery] PASS');
-console.log(`[portfolio-scenery] dedicatedArtwork=${visuals.length}`);
-console.log('[portfolio-scenery] layersPerStop=3');
-console.log('[portfolio-scenery] projection=accelerated-side-growth');
+console.log(`[portfolio-scenery] dedicatedHeroStations=${visuals.length}`);
+console.log('[portfolio-scenery] depth=hero-plus-lead-trail-companions');
+console.log('[portfolio-scenery] hierarchy=bold-silhouette-before-detail');
+console.log('[portfolio-scenery] projection=accelerated-side-growth-capped-near-scale');
 console.log('[portfolio-scenery] legacyPlanetAndCrosshairPlaceholders=0');
