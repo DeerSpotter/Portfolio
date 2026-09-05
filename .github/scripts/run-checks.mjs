@@ -39,7 +39,10 @@ try {
     }
   }
   await run('Syntax: browser proof', process.execPath, ['--check', 'verify-canvas.mjs']);
+  await run('Syntax: billboard browser proof', process.execPath, ['--check', 'verify-billboard-browser.mjs']);
   await run('Layered scenery contract', process.execPath, ['.github/scripts/verify-scenery.mjs']);
+  await run('Interactive billboard contract', process.execPath, ['.github/scripts/verify-billboard.mjs']);
+  await run('Scene-spanning ribbon contract', process.execPath, ['.github/scripts/verify-ribbon.mjs']);
   await run('Prepare browser test dependency', 'npm', ['init', '-y']);
   await run('Install pinned Playwright', 'npm', ['install', '--no-save', '--package-lock=false', 'playwright@1.55.0']);
   await run('Install Chromium and system dependencies', 'npx', ['playwright', 'install', '--with-deps', 'chromium']);
@@ -77,6 +80,7 @@ try {
   if (!ready) throw new Error(`Packaged site did not become ready: ${url}`);
   process.env.PORTFOLIO_URL = url;
   await run('Flight baseline and hiring experience', process.execPath, ['verify-canvas.mjs']);
+  await run('Billboard depth and interaction experience', process.execPath, ['verify-billboard-browser.mjs']);
   result = { status: 0, stage: 'All checks passed' };
 } catch (error) {
   log(`\n[FAIL] ${stage}\n${error.stack || error}\n`);
