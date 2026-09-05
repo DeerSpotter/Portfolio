@@ -85,9 +85,7 @@ async function exercise(viewport, label, reducedMotion = false) {
 
   if (samples.length < 150) throw new Error(`${label}: insufficient bank samples: ${samples.length}`);
   const progressTravel = Math.abs(samples.at(-1).progress - samples[0].progress);
-  if (progressTravel < 0.25) {
-    throw new Error(`${label}: normal flight progress was slowed or collapsed: delta=${progressTravel}`);
-  }
+  if (progressTravel < 0.25) throw new Error(`${label}: normal flight progress was slowed or collapsed: delta=${progressTravel}`);
 
   if (reducedMotion && !samples.some(sample => Math.abs(sample.reducedMotionScale - 0.62) < 0.001)) {
     throw new Error(`${label}: reduced-motion bank should remain active at reduced amplitude.`);
@@ -112,10 +110,9 @@ async function exercise(viewport, label, reducedMotion = false) {
     maxRollStep = Math.max(maxRollStep, Math.abs(current.roll - previous.roll));
     sinceLastActiveChangeMinAbsRoll = Math.min(sinceLastActiveChangeMinAbsRoll, Math.abs(current.roll));
 
-    if (Math.abs(current.targetRoll) > 0.04 && Math.abs(current.turnSignal) > 0.001) {
-      if (Math.sign(current.targetRoll) !== Math.sign(current.turnSignal)) {
-        throw new Error(`${label}: bank direction is not following signed route curvature: ${JSON.stringify(current)}`);
-      }
+    if (Math.abs(current.targetRoll) > 0.04 && Math.abs(current.turnSignal) > 0.001
+      && Math.sign(current.targetRoll) !== Math.sign(current.turnSignal)) {
+      throw new Error(`${label}: bank direction is not following signed route curvature: ${JSON.stringify(current)}`);
     }
 
     if (current.requestedSide && current.activeSide && current.requestedSide !== current.activeSide) {
@@ -138,14 +135,11 @@ async function exercise(viewport, label, reducedMotion = false) {
   if (centerGateFrames < 1 || oppositeSideTransitions < 1) {
     throw new Error(`${label}: centered right/left handoff was not exercised: centerFrames=${centerGateFrames}, transitions=${oppositeSideTransitions}`);
   }
-  if (maxRollStep > 0.14) {
-    throw new Error(`${label}: bank still jolts between frames: max roll step=${maxRollStep}`);
-  }
+  if (maxRollStep > 0.14) throw new Error(`${label}: bank still jolts between frames: max roll step=${maxRollStep}`);
 
   const seam = await page.evaluate(async () => {
     const result = [];
     const max = document.documentElement.scrollHeight - innerHeight;
-
     const capture = phase => {
       const ship = window.__portfolioShipDebug;
       const canvas = window.__portfolioCanvasDebug;
@@ -185,7 +179,6 @@ async function exercise(viewport, label, reducedMotion = false) {
     }
 
     dispatchEvent(new WheelEvent('wheel', { deltaY: 1000, cancelable: true }));
-
     let cycleChanged = false;
     for (let frame = 0; frame < 30; frame++) {
       await new Promise(requestAnimationFrame);
@@ -214,25 +207,13 @@ async function exercise(viewport, label, reducedMotion = false) {
   if (!seam.cycleChanged) throw new Error(`${label}: reloop did not change loopCycle.`);
 
   const approachFrames = seam.result.filter(sample => sample.phase === 'approach' || sample.phase === 'pre-wrap-settle');
-  const preLevel = approachFrames.find(sample =>
-    sample.loopCycle === seam.cycleBefore
-    && sample.progress >= 0.90
-    && sample.neutralizing
-    && sample.neutralZone
-  );
+  const preLevel = approachFrames.find(sample => sample.loopCycle === seam.cycleBefore && sample.progress >= 0.90 && sample.neutralizing && sample.neutralZone);
   if (!preLevel) throw new Error(`${label}: ship did not begin leveling before the 06 -> 01 loopCycle wrap.`);
 
-  const cameraLockedBeforeWrap = approachFrames.find(sample =>
-    sample.loopCycle === seam.cycleBefore
-    && sample.progress >= 0.91
-    && sample.cameraSeamBlend >= 0.98
-  );
+  const cameraLockedBeforeWrap = approachFrames.find(sample => sample.loopCycle === seam.cycleBefore && sample.progress >= 0.91 && sample.cameraSeamBlend >= 0.98);
   if (!cameraLockedBeforeWrap) throw new Error(`${label}: chase camera did not attach to rendered ship before route-tangent reversal.`);
 
-  const preWrapSettled = [...approachFrames].reverse().find(sample =>
-    sample.loopCycle === seam.cycleBefore
-    && sample.progress >= 0.97
-  );
+  const preWrapSettled = [...approachFrames].reverse().find(sample => sample.loopCycle === seam.cycleBefore && sample.progress >= 0.97);
   if (!preWrapSettled) throw new Error(`${label}: no settled pre-wrap ship sample was captured.`);
   if (Math.abs(preWrapSettled.roll) > 0.04 || Math.abs(preWrapSettled.cameraBankOffset) > 0.04) {
     throw new Error(`${label}: ship/camera were still laterally banked at the reloop: ${JSON.stringify(preWrapSettled)}`);
