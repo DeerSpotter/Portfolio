@@ -85,7 +85,14 @@
   .chapter { display: block; max-width: none; text-align: right; }
   .chapter .kicker { margin: 0 0 1px; font-size: .4rem; line-height: 1.15; letter-spacing: .05em; }
   .chapter .name { font-size: .68rem; line-height: 1.1; }
-  .chapter .text-link { min-height: 27px; margin-top: 2px; font-size: .43rem; line-height: 1.2; }
+  .chapter .text-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 27px;
+    margin: 2px 0 0;
+    font-size: .43rem;
+    line-height: 1.2;
+  }
 
   /* The long-form brief stays fully available, just denser. */
   dialog { width: calc(100% - 10px); max-height: calc(100dvh - 10px); }
@@ -137,9 +144,9 @@
   #destination .destination-stage-links .text-link { min-height: 26px; font-size: .48rem; }
   #destination .destination-scroll-cue { margin-top: 6px; padding: 4px 7px; font-size: .42rem; }
   #destination .destination-trace { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding-top: 8px; }
-  #destination .destination-trace::before { top: 1px; }
+  #destination .destination-trace::before { display: block; top: 1px; }
   #destination .destination-trace li { padding: 5px 2px 3px; }
-  #destination .destination-trace li::before { top: -7px; width: 5px; height: 5px; }
+  #destination .destination-trace li::before { display: block; top: -7px; width: 5px; height: 5px; }
   #destination .destination-trace strong { font-size: .46rem; }
   #destination .destination-trace span { margin-top: 2px; font-size: .39rem; line-height: 1.2; }
   #destination .destination-readout,
