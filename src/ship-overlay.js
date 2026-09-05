@@ -58,9 +58,7 @@ const curvatureProbe = new THREE.Vector3();
 const right = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
-const smoothLook = new THREE.Vector3();
 let poseInitialized = false;
-let cameraPoseInitialized = false;
 
 function wrap01(value) {
   return ((value % 1) + 1) % 1;
@@ -77,10 +75,6 @@ function damp(current, target, lambda, dt) {
 function dampAngle(current, target, lambda, dt) {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + delta * (1 - Math.exp(-lambda * dt));
-}
-
-function usesCompactFlight() {
-  return window.matchMedia('(max-width: 700px), (max-width: 900px) and (max-height: 600px)').matches;
 }
 
 let lastTime = performance.now();
@@ -116,19 +110,15 @@ function animate(now) {
   route.getPointAt(progress, routePos);
   route.getTangentAt(progress, tangent).normalize();
 
-  const compactFlight = usesCompactFlight();
-  const basePositionLambda = compactFlight ? 4.6 : 6.2;
-  const baseTangentLambda = compactFlight ? 4.0 : 5.3;
-  const positionLambda = Math.max(2.7, basePositionLambda - coastAmount * 1.45 - timeFieldAmount * 0.70);
-  const tangentLambda = Math.max(2.5, baseTangentLambda - coastAmount * 1.25 - timeFieldAmount * 0.65);
-
   if (!poseInitialized) {
     smoothPos.copy(routePos);
     smoothTangent.copy(tangent);
     poseInitialized = true;
   } else {
-    smoothPos.lerp(routePos, 1 - Math.exp(-positionLambda * dt));
-    smoothTangent.lerp(tangent, 1 - Math.exp(-tangentLambda * dt)).normalize();
+    const positionLambda = 9.0 - coastAmount * 3.2 - timeFieldAmount * 1.4;
+    const tangentLambda = 7.5 - coastAmount * 2.6 - timeFieldAmount * 1.3;
+    smoothPos.lerp(routePos, 1 - Math.exp(-Math.max(3.2, positionLambda) * dt));
+    smoothTangent.lerp(tangent, 1 - Math.exp(-Math.max(2.8, tangentLambda) * dt)).normalize();
   }
 
   right.crossVectors(smoothTangent, worldUp).normalize();
@@ -146,12 +136,10 @@ function animate(now) {
     0.82,
   );
 
-  const baseAttitudeLambda = compactFlight ? 4.4 : 5.6;
-  const attitudeLambda = Math.max(2.8, baseAttitudeLambda - coastAmount * 1.2 - timeFieldAmount * 0.55);
-  const rollLambda = Math.max(2.5, (compactFlight ? 3.8 : 4.8) - coastAmount - timeFieldAmount * 0.45);
+  const attitudeLambda = Math.max(3.4, 8.5 - coastAmount * 3.2 - timeFieldAmount * 1.2);
   ship.rotation.y = dampAngle(ship.rotation.y, yaw, attitudeLambda, dt);
   ship.rotation.x = dampAngle(ship.rotation.x, -pitch * 0.86, attitudeLambda, dt);
-  ship.rotation.z = dampAngle(ship.rotation.z, targetRoll, rollLambda, dt);
+  ship.rotation.z = dampAngle(ship.rotation.z, targetRoll, Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount), dt);
 
   setShipEngineState(ship, {
     thrust: warpAmount,
@@ -163,22 +151,13 @@ function animate(now) {
     .addScaledVector(smoothTangent, -11.6 - warpAmount * 5.5)
     .addScaledVector(worldUp, 4.5 + warpAmount * 0.8)
     .addScaledVector(right, -ship.rotation.z * 0.92);
+  const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);
+  camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
 
   desiredLook.copy(smoothPos)
     .addScaledVector(smoothTangent, 13.5 + warpAmount * 12)
     .addScaledVector(worldUp, 0.35);
-
-  const cameraLambda = Math.max(2.6, (compactFlight ? 3.5 : 4.3) - coastAmount * 0.72 - timeFieldAmount * 0.36);
-  const lookLambda = Math.max(2.4, (compactFlight ? 3.1 : 3.8) - coastAmount * 0.62 - timeFieldAmount * 0.30);
-  if (!cameraPoseInitialized) {
-    camera.position.copy(desiredCamera);
-    smoothLook.copy(desiredLook);
-    cameraPoseInitialized = true;
-  } else {
-    camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
-    smoothLook.lerp(desiredLook, 1 - Math.exp(-lookLambda * dt));
-  }
-  camera.lookAt(smoothLook);
+  camera.lookAt(desiredLook);
 
   const fovLambda = Math.max(3.0, 6.2 - coastAmount * 1.8 - timeFieldAmount * 0.7);
   const nextFov = damp(camera.fov, 48 + warpAmount * 14, fovLambda, dt);
@@ -187,8 +166,6 @@ function animate(now) {
     camera.updateProjectionMatrix();
   }
 
-  const routeLag = smoothPos.distanceTo(routePos);
-  const lookLag = smoothLook.distanceTo(desiredLook);
   window.__portfolioShipDebug = {
     ready: true,
     engine: 'three-overlay',
@@ -202,18 +179,6 @@ function animate(now) {
     warpAmount,
     coastAmount,
     timeFieldAmount,
-    smoothingContract: 'inertial-chase-presentation-v1',
-    smoothing: {
-      compact: compactFlight,
-      positionLambda,
-      tangentLambda,
-      attitudeLambda,
-      rollLambda,
-      cameraLambda,
-      lookLambda,
-      routeLag,
-      lookLag,
-    },
     exhaust: 'turbulent-nozzle-rooted-shader-v1',
     engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
     ship: {
@@ -223,11 +188,6 @@ function animate(now) {
       pitch: ship.rotation.x,
       yaw: ship.rotation.y,
       roll: ship.rotation.z,
-    },
-    targetShip: {
-      x: routePos.x,
-      y: routePos.y,
-      z: routePos.z,
     },
     camera: {
       x: camera.position.x,
