@@ -1,13 +1,13 @@
 const TAU = Math.PI * 2;
-const FLAME_CONTRACT = 'canvas2d-industrial-edge-flame-v3';
-const MAX_REAR_PARTICLES = 58;
-const MAX_FRONT_PARTICLES = 34;
+const FLAME_CONTRACT = 'canvas2d-defined-industrial-flame-v4';
+const MAX_REAR_PARTICLES = 42;
+const MAX_FRONT_PARTICLES = 28;
 
 const INDUSTRIAL_PALETTES = [
-  { outer: [47, 42, 35], core: [184, 92, 46], ember: [128, 52, 34] },
-  { outer: [38, 40, 34], core: [101, 112, 61], ember: [164, 92, 42] },
-  { outer: [57, 44, 34], core: [198, 111, 46], ember: [139, 56, 37] },
-  { outer: [43, 43, 40], core: [126, 119, 96], ember: [156, 70, 39] },
+  { outer: [52, 38, 28], mid: [159, 70, 38], core: [222, 126, 48], accent: [111, 120, 62] },
+  { outer: [40, 43, 31], mid: [111, 119, 58], core: [190, 105, 38], accent: [144, 51, 35] },
+  { outer: [58, 41, 29], mid: [181, 78, 38], core: [229, 139, 54], accent: [128, 65, 37] },
+  { outer: [49, 48, 34], mid: [126, 122, 61], core: [202, 91, 40], accent: [153, 54, 36] },
 ];
 
 function clamp(value, min, max) {
@@ -20,38 +20,29 @@ function rotatePoint(x, y, angle) {
   return { x: x * c - y * s, y: x * s + y * c };
 }
 
+function rgba(rgb, alpha) {
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
+
 function stateStrength(state, timeFieldStrength) {
   const base = {
-    distant: 0.02,
-    approaching: 0.20,
-    arming: 0.54,
-    active: 0.90,
-    passing: 0.40,
-  }[state] ?? 0.03;
-  const boost = state === 'active' ? timeFieldStrength * 0.08 : 0;
-  return clamp(base + boost, 0.02, 1);
+    distant: 0.015,
+    approaching: 0.18,
+    arming: 0.56,
+    active: 0.94,
+    passing: 0.42,
+  }[state] ?? 0.02;
+  return clamp(base + (state === 'active' ? timeFieldStrength * 0.06 : 0), 0.01, 1);
 }
 
 function rearEmissionRate(state, strength) {
-  const base = {
-    distant: 1,
-    approaching: 6,
-    arming: 17,
-    active: 28,
-    passing: 13,
-  }[state] ?? 1;
-  return base * (0.74 + strength * 0.48);
+  const base = { distant: 0, approaching: 4, arming: 13, active: 20, passing: 9 }[state] ?? 0;
+  return base * (0.78 + strength * 0.44);
 }
 
 function frontEmissionRate(state, strength) {
-  const base = {
-    distant: 0,
-    approaching: 1.5,
-    arming: 10,
-    active: 18,
-    passing: 6,
-  }[state] ?? 0;
-  return base * (0.70 + strength * 0.50);
+  const base = { distant: 0, approaching: 1, arming: 7, active: 13, passing: 4 }[state] ?? 0;
+  return base * (0.76 + strength * 0.46);
 }
 
 function makeCanvas(className, zIndex) {
@@ -91,7 +82,7 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
   function resize() {
     width = Math.max(1, innerWidth);
     height = Math.max(1, innerHeight);
-    dpr = Math.min(1.35, Math.max(0.8, devicePixelRatio || 1));
+    dpr = Math.min(1.4, Math.max(0.8, devicePixelRatio || 1));
     for (const [canvas, ctx] of [[rearCanvas, rearCtx], [frontCanvas, frontCtx]]) {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
@@ -118,32 +109,39 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
 
   function edgeAnchor(screen, layer) {
     const { scale, halfW, halfH } = cardGeometry(screen);
-    const edge = Math.floor(Math.random() * 8);
+    const front = layer === 'front';
+    const edgePick = Math.random();
+    const edge = edgePick < 0.39 ? 'left'
+      : edgePick < 0.78 ? 'right'
+        : edgePick < 0.89 ? 'top'
+          : 'bottom';
+
     let ox = 0;
     let oy = 0;
     let normalX = 0;
     let normalY = 0;
     let tangentX = 0;
     let tangentY = 0;
+    const inset = front ? (6 + Math.random() * 12) * scale : -(5 + Math.random() * 8) * scale;
 
-    if (edge <= 2) {
-      ox = -halfW + (layer === 'front' ? 2 : -7) * scale;
-      oy = (Math.random() * 1.72 - 0.86) * halfH;
+    if (edge === 'left') {
+      ox = -halfW + inset;
+      oy = (Math.random() * 1.74 - 0.87) * halfH;
       normalX = -1;
       tangentY = 1;
-    } else if (edge <= 5) {
-      ox = halfW + (layer === 'front' ? -2 : 7) * scale;
-      oy = (Math.random() * 1.72 - 0.86) * halfH;
+    } else if (edge === 'right') {
+      ox = halfW - inset;
+      oy = (Math.random() * 1.74 - 0.87) * halfH;
       normalX = 1;
       tangentY = -1;
-    } else if (edge === 6) {
-      ox = (Math.random() * 1.42 - 0.71) * halfW;
-      oy = -halfH + (layer === 'front' ? 2 : -6) * scale;
+    } else if (edge === 'top') {
+      ox = (Math.random() * 1.48 - 0.74) * halfW;
+      oy = -halfH + inset;
       normalY = -1;
       tangentX = 1;
     } else {
-      ox = (Math.random() * 1.42 - 0.71) * halfW;
-      oy = halfH + (layer === 'front' ? -2 : 6) * scale;
+      ox = (Math.random() * 1.48 - 0.74) * halfW;
+      oy = halfH - inset;
       normalY = 1;
       tangentX = -1;
     }
@@ -160,6 +158,7 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
       tx: tangent.x,
       ty: tangent.y,
       scale,
+      edge,
     };
   }
 
@@ -175,175 +174,177 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
     flightX /= flightMagnitude;
     flightY /= flightMagnitude;
 
-    const palette = INDUSTRIAL_PALETTES[Math.floor(Math.random() * INDUSTRIAL_PALETTES.length)];
-    const sideNoise = (Math.random() - 0.5);
     const front = layer === 'front';
-    const speed = front
-      ? 28 + strength * 36 + Math.random() * 16
-      : 32 + strength * 45 + Math.random() * 22;
-    const tangentBias = sideNoise * (front ? 42 : 26);
-    const flightBias = front ? 0.36 : 0.88;
-    const outwardBias = front ? 13 + strength * 13 : 6 + strength * 8;
-    const lift = front ? 16 + strength * 18 : 8 + strength * 12;
+    const palette = INDUSTRIAL_PALETTES[Math.floor(Math.random() * INDUSTRIAL_PALETTES.length)];
+    const jitter = Math.random() - 0.5;
+    const speed = front ? 24 + strength * 28 + Math.random() * 12 : 30 + strength * 34 + Math.random() * 18;
+    const outward = front ? 28 + strength * 22 : 18 + strength * 14;
+    const tangent = jitter * (front ? 24 : 18);
+    const flightBias = front ? 0.24 : 0.64;
 
     target.push({
       layer,
       x: anchor.x,
       y: anchor.y,
-      vx: flightX * speed * flightBias + anchor.tx * tangentBias + anchor.nx * outwardBias,
-      vy: flightY * speed * flightBias + anchor.ty * tangentBias + anchor.ny * outwardBias - lift,
-      nx: anchor.nx,
-      ny: anchor.ny,
+      vx: anchor.nx * outward + anchor.tx * tangent + flightX * speed * flightBias,
+      vy: anchor.ny * outward + anchor.ty * tangent + flightY * speed * flightBias - (front ? 18 : 10),
       tangentX: anchor.tx,
       tangentY: anchor.ty,
       age: 0,
-      life: front
-        ? 0.48 + Math.random() * 0.58 + strength * 0.16
-        : 1.00 + Math.random() * 1.08 + strength * 0.28,
-      width: (front ? 8 : 7) + Math.random() * (front ? 12 : 10),
-      length: (front ? 27 : 34) + Math.random() * (front ? 35 : 45),
+      life: front ? 0.55 + Math.random() * 0.42 : 0.90 + Math.random() * 0.72,
+      width: (front ? 10 : 9) + Math.random() * (front ? 9 : 8),
+      length: (front ? 48 : 58) + Math.random() * (front ? 28 : 38),
       scale: anchor.scale,
       phase: Math.random() * TAU,
-      frequency: 3.0 + Math.random() * 3.4,
-      curl: (front ? 28 : 19) + Math.random() * (front ? 38 : 28),
-      alpha: front
-        ? 0.22 + strength * 0.28 + Math.random() * 0.08
-        : 0.12 + strength * 0.19 + Math.random() * 0.06,
+      frequency: 4.4 + Math.random() * 2.5,
+      curl: (front ? 18 : 14) + Math.random() * (front ? 16 : 12),
+      alpha: front ? 0.66 + strength * 0.22 : 0.42 + strength * 0.20,
       palette,
+      front,
     });
   }
 
   function updateParticle(particle, dt, motionScale) {
     particle.age += dt;
-    const t = clamp(particle.age / particle.life, 0, 1);
     const curl = Math.sin(particle.phase + particle.age * particle.frequency) * particle.curl;
     particle.vx += particle.tangentX * curl * dt;
-    particle.vy += particle.tangentY * curl * dt - (particle.layer === 'front' ? 5.0 : 2.4) * dt;
-    const damping = particle.layer === 'front' ? 0.975 : 0.985;
+    particle.vy += particle.tangentY * curl * dt - (particle.front ? 7.0 : 3.4) * dt;
+    const damping = particle.front ? 0.978 : 0.986;
     particle.vx *= Math.pow(damping, dt * 60);
-    particle.vy *= Math.pow(damping + 0.004, dt * 60);
+    particle.vy *= Math.pow(damping + 0.003, dt * 60);
     particle.x += particle.vx * dt * motionScale;
     particle.y += particle.vy * dt * motionScale;
-    return t < 1;
+    return particle.age < particle.life;
   }
 
-  function rgba(rgb, alpha) {
-    return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+  function flamePath(ctx, baseX, baseY, tipX, tipY, nx, ny, widthNow, bend, inset = 0) {
+    const ux = tipX - baseX;
+    const uy = tipY - baseY;
+    const len = Math.max(1, Math.hypot(ux, uy));
+    const dx = ux / len;
+    const dy = uy / len;
+    const w = Math.max(1, widthNow - inset);
+
+    const shoulder1X = baseX + dx * len * 0.22 + nx * (w * 0.92 + bend * 0.18);
+    const shoulder1Y = baseY + dy * len * 0.22 + ny * (w * 0.92 + bend * 0.18);
+    const neck1X = baseX + dx * len * 0.66 + nx * (w * 0.34 + bend);
+    const neck1Y = baseY + dy * len * 0.66 + ny * (w * 0.34 + bend);
+    const shoulder2X = baseX + dx * len * 0.23 - nx * (w * 0.76 - bend * 0.12);
+    const shoulder2Y = baseY + dy * len * 0.23 - ny * (w * 0.76 - bend * 0.12);
+    const neck2X = baseX + dx * len * 0.62 - nx * (w * 0.28 - bend * 0.72);
+    const neck2Y = baseY + dy * len * 0.62 - ny * (w * 0.28 - bend * 0.72);
+
+    ctx.beginPath();
+    ctx.moveTo(baseX + nx * w * 0.74, baseY + ny * w * 0.74);
+    ctx.bezierCurveTo(shoulder1X, shoulder1Y, neck1X, neck1Y, tipX, tipY);
+    ctx.bezierCurveTo(neck2X, neck2Y, shoulder2X, shoulder2Y, baseX - nx * w * 0.68, baseY - ny * w * 0.68);
+    ctx.quadraticCurveTo(baseX - dx * w * 0.26, baseY - dy * w * 0.26, baseX + nx * w * 0.74, baseY + ny * w * 0.74);
+    ctx.closePath();
   }
 
-  function drawFlameTongue(ctx, particle, strength) {
+  function drawDefinedFlame(ctx, particle, strength) {
     const t = clamp(particle.age / particle.life, 0, 1);
-    const fade = Math.sin(Math.PI * t) * (1 - t * 0.28);
-    if (fade <= 0.001) return;
+    const grow = clamp(t / 0.16, 0, 1);
+    const fade = 1 - Math.pow(clamp((t - 0.62) / 0.38, 0, 1), 1.35);
+    const pulse = 0.92 + Math.sin(particle.phase + particle.age * particle.frequency * 1.8) * 0.08;
+    const alpha = particle.alpha * grow * fade * pulse;
+    if (alpha <= 0.01) return;
 
     const speed = Math.max(1, Math.hypot(particle.vx, particle.vy));
     const ux = particle.vx / speed;
     const uy = particle.vy / speed;
     const nx = -uy;
     const ny = ux;
-    const wave = Math.sin(particle.phase + particle.age * particle.frequency * 1.35);
-    const front = particle.layer === 'front';
-    const length = particle.length * particle.scale * (front ? 0.86 : 1.08) * (0.78 + t * 0.50);
-    const widthNow = particle.width * particle.scale * (front ? 1.02 : 0.90) * (0.72 + t * 0.42);
-    const bend = wave * widthNow * (front ? 1.95 : 1.55);
+    const front = particle.front;
+    const length = particle.length * particle.scale * (front ? 0.92 : 1.06) * (0.82 + t * 0.38);
+    const widthNow = particle.width * particle.scale * (front ? 1.06 : 0.96) * (0.92 - t * 0.22);
+    const bend = Math.sin(particle.phase + particle.age * particle.frequency) * widthNow * (front ? 0.72 : 0.58);
 
-    const tipX = particle.x;
-    const tipY = particle.y;
-    const baseX = tipX - ux * length;
-    const baseY = tipY - uy * length;
-    const controlX = tipX - ux * length * 0.48 + nx * bend;
-    const controlY = tipY - uy * length * 0.48 + ny * bend;
-    const alpha = particle.alpha * fade * (0.76 + strength * 0.34);
+    const baseX = particle.x;
+    const baseY = particle.y;
+    const tipX = baseX + ux * length + nx * bend;
+    const tipY = baseY + uy * length + ny * bend;
 
-    // Soot-dark outer tongue gives the flame weight against the parchment world.
+    // Crisp dark silhouette. This is intentionally opaque enough to read as flame,
+    // not translucent smoke or a feather.
     const outerGradient = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
-    outerGradient.addColorStop(0, rgba(particle.palette.outer, alpha * 0.16));
-    outerGradient.addColorStop(0.28, rgba(particle.palette.outer, alpha * 0.70));
-    outerGradient.addColorStop(0.72, rgba(particle.palette.outer, alpha * 0.52));
-    outerGradient.addColorStop(1, rgba(particle.palette.outer, 0));
-
-    ctx.beginPath();
-    ctx.moveTo(baseX + nx * widthNow * 0.52, baseY + ny * widthNow * 0.52);
-    ctx.quadraticCurveTo(controlX + nx * widthNow * 1.10, controlY + ny * widthNow * 1.10, tipX, tipY);
-    ctx.quadraticCurveTo(controlX - nx * widthNow * 0.92, controlY - ny * widthNow * 0.92, baseX - nx * widthNow * 0.52, baseY - ny * widthNow * 0.52);
-    ctx.quadraticCurveTo(baseX - ux * widthNow * 0.18, baseY - uy * widthNow * 0.18, baseX + nx * widthNow * 0.52, baseY + ny * widthNow * 0.52);
-    ctx.closePath();
+    outerGradient.addColorStop(0, rgba(particle.palette.outer, alpha * 0.96));
+    outerGradient.addColorStop(0.44, rgba(particle.palette.mid, alpha * 0.90));
+    outerGradient.addColorStop(0.82, rgba(particle.palette.accent, alpha * 0.58));
+    outerGradient.addColorStop(1, rgba(particle.palette.outer, alpha * 0.10));
+    flamePath(ctx, baseX, baseY, tipX, tipY, nx, ny, widthNow, bend);
     ctx.fillStyle = outerGradient;
     ctx.fill();
+    ctx.strokeStyle = rgba(particle.palette.outer, alpha * 0.78);
+    ctx.lineWidth = Math.max(0.8, widthNow * 0.09);
+    ctx.stroke();
 
-    // A narrower industrial-color core makes it read as flame rather than blur.
-    const coreWidth = widthNow * (front ? 0.42 : 0.34);
-    const coreLength = length * (front ? 0.76 : 0.62);
-    const coreBaseX = tipX - ux * coreLength;
-    const coreBaseY = tipY - uy * coreLength;
-    const coreControlX = tipX - ux * coreLength * 0.48 + nx * bend * 0.52;
-    const coreControlY = tipY - uy * coreLength * 0.48 + ny * bend * 0.52;
-    const coreGradient = ctx.createLinearGradient(coreBaseX, coreBaseY, tipX, tipY);
-    coreGradient.addColorStop(0, rgba(particle.palette.ember, alpha * 0.10));
-    coreGradient.addColorStop(0.30, rgba(particle.palette.core, alpha * (front ? 0.82 : 0.48)));
-    coreGradient.addColorStop(0.68, rgba(particle.palette.ember, alpha * (front ? 0.66 : 0.36)));
-    coreGradient.addColorStop(1, rgba(particle.palette.core, 0));
-
-    ctx.beginPath();
-    ctx.moveTo(coreBaseX + nx * coreWidth, coreBaseY + ny * coreWidth);
-    ctx.quadraticCurveTo(coreControlX + nx * coreWidth * 1.06, coreControlY + ny * coreWidth * 1.06, tipX, tipY);
-    ctx.quadraticCurveTo(coreControlX - nx * coreWidth * 0.86, coreControlY - ny * coreWidth * 0.86, coreBaseX - nx * coreWidth, coreBaseY - ny * coreWidth);
-    ctx.closePath();
-    ctx.fillStyle = coreGradient;
+    // Bright inner tongue gives a defined hot core.
+    const innerLength = length * 0.72;
+    const innerBaseX = baseX + ux * length * 0.08;
+    const innerBaseY = baseY + uy * length * 0.08;
+    const innerTipX = innerBaseX + ux * innerLength + nx * bend * 0.46;
+    const innerTipY = innerBaseY + uy * innerLength + ny * bend * 0.46;
+    const innerGradient = ctx.createLinearGradient(innerBaseX, innerBaseY, innerTipX, innerTipY);
+    innerGradient.addColorStop(0, rgba(particle.palette.core, alpha * 0.96));
+    innerGradient.addColorStop(0.46, rgba(particle.palette.mid, alpha * 0.94));
+    innerGradient.addColorStop(0.86, rgba(particle.palette.accent, alpha * 0.66));
+    innerGradient.addColorStop(1, rgba(particle.palette.core, 0));
+    flamePath(ctx, innerBaseX, innerBaseY, innerTipX, innerTipY, nx, ny, widthNow * 0.46, bend * 0.42);
+    ctx.fillStyle = innerGradient;
     ctx.fill();
 
-    if (!front) {
-      // Rear flames dissolve into a thin grey soot tail rather than a round cloud.
+    // Small ember kernel right on the card edge makes the source of each tongue obvious.
+    const emberRadius = Math.max(1.6, widthNow * (front ? 0.22 : 0.16));
+    ctx.beginPath();
+    ctx.arc(baseX, baseY, emberRadius, 0, TAU);
+    ctx.fillStyle = rgba(particle.palette.core, alpha * (front ? 0.82 : 0.58));
+    ctx.fill();
+
+    if (!front && t > 0.34) {
+      const sootAlpha = alpha * (0.16 + t * 0.10);
       ctx.beginPath();
-      ctx.moveTo(baseX, baseY);
+      ctx.moveTo(tipX, tipY);
       ctx.quadraticCurveTo(
-        baseX - ux * length * 0.32 + nx * bend * 0.34,
-        baseY - uy * length * 0.32 + ny * bend * 0.34,
-        baseX - ux * length * 0.58,
-        baseY - uy * length * 0.58,
+        tipX + ux * length * 0.22 + nx * bend * 0.35,
+        tipY + uy * length * 0.22 + ny * bend * 0.35,
+        tipX + ux * length * 0.46,
+        tipY + uy * length * 0.46,
       );
-      ctx.strokeStyle = `rgba(92,92,88,${alpha * 0.24})`;
-      ctx.lineWidth = Math.max(0.7, widthNow * 0.14);
+      ctx.strokeStyle = `rgba(78,74,68,${sootAlpha})`;
+      ctx.lineWidth = Math.max(0.7, widthNow * 0.10);
       ctx.lineCap = 'round';
       ctx.stroke();
     }
   }
 
-  function drawReducedMotionLayer(ctx, layer, screen, vanishingPoint, strength) {
+  function drawStaticFlames(ctx, screen, layer, strength) {
     if (strength < 0.12) return;
     const { halfW, halfH, scale } = cardGeometry(screen);
-    let flightX = vanishingPoint.x - screen.x;
-    let flightY = vanishingPoint.y - screen.y;
-    const magnitude = Math.max(1, Math.hypot(flightX, flightY));
-    flightX /= magnitude;
-    flightY /= magnitude;
-
-    const count = layer === 'front' ? 5 : 7;
+    const front = layer === 'front';
+    const count = front ? 5 : 7;
     for (let i = 0; i < count; i++) {
-      const side = i % 2 ? 1 : -1;
-      const front = layer === 'front';
-      const x = screen.x + side * halfW * (front ? 0.96 : 1.06);
-      const y = screen.y + ((i / Math.max(1, count - 1)) - 0.5) * halfH * 1.45;
+      const side = i % 2 === 0 ? -1 : 1;
+      const x = screen.x + side * (halfW - (front ? 9 : -5) * scale);
+      const y = screen.y + ((i / Math.max(1, count - 1)) - 0.5) * halfH * 1.55;
       const palette = INDUSTRIAL_PALETTES[i % INDUSTRIAL_PALETTES.length];
-      drawFlameTongue(ctx, {
-        layer,
+      const particle = {
+        front,
         x,
         y,
-        vx: flightX * 42 + side * 12,
-        vy: flightY * 42 - 12,
-        tangentX: side,
-        tangentY: 0.3,
-        age: 0.42,
-        life: 1.35,
-        width: front ? 10 : 8,
-        length: front ? 34 : 46,
+        vx: side * (front ? 38 : 30),
+        vy: -24 - i * 1.5,
+        age: 0.22,
+        life: 0.85,
+        width: front ? 13 : 11,
+        length: front ? 58 : 72,
         scale,
-        phase: i * 0.82,
-        frequency: 2.8,
-        curl: 22,
-        alpha: (front ? 0.30 : 0.18) + strength * 0.14,
+        phase: i * 0.84,
+        frequency: 5.2,
+        alpha: front ? 0.72 : 0.48,
         palette,
-      }, strength);
+      };
+      drawDefinedFlame(ctx, particle, strength);
     }
   }
 
@@ -364,12 +365,11 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
 
     if (reducedMotion) {
       clearParticles();
-      drawReducedMotionLayer(rearCtx, 'rear', screen, vanishingPoint, strength);
-      drawReducedMotionLayer(frontCtx, 'front', screen, vanishingPoint, strength);
+      drawStaticFlames(rearCtx, screen, 'rear', strength);
+      drawStaticFlames(frontCtx, screen, 'front', strength);
     } else {
       rearCarry += rearEmissionRate(projected.state, strength) * dt;
       frontCarry += frontEmissionRate(projected.state, strength) * dt;
-
       while (rearCarry >= 1 && rearParticles.length < MAX_REAR_PARTICLES) {
         spawn(screen, projected, vanishingPoint, strength, 'rear');
         rearCarry -= 1;
@@ -379,42 +379,39 @@ export function createBillboardSmokeRenderer({ hud, billboard, reducedMotion }) 
         frontCarry -= 1;
       }
 
-      const motionScale = interactionHold ? 0.33 : (0.78 + (1 - timeFieldStrength) * 0.38);
-      for (const particles of [rearParticles, frontParticles]) {
-        for (let i = particles.length - 1; i >= 0; i--) {
-          if (!updateParticle(particles[i], dt, motionScale)) particles.splice(i, 1);
-        }
+      const motionScale = interactionHold ? 0.42 : (0.82 + (1 - timeFieldStrength) * 0.28);
+      for (let i = rearParticles.length - 1; i >= 0; i--) {
+        if (!updateParticle(rearParticles[i], dt, motionScale)) rearParticles.splice(i, 1);
+      }
+      for (let i = frontParticles.length - 1; i >= 0; i--) {
+        if (!updateParticle(frontParticles[i], dt, motionScale)) frontParticles.splice(i, 1);
       }
 
-      for (const particle of rearParticles) drawFlameTongue(rearCtx, particle, strength);
-      for (const particle of frontParticles) drawFlameTongue(frontCtx, particle, strength);
-    }
+      rearCtx.save();
+      rearCtx.globalCompositeOperation = 'source-over';
+      for (const particle of rearParticles) drawDefinedFlame(rearCtx, particle, strength);
+      rearCtx.restore();
 
-    rearCanvas.dataset.flameState = projected.state;
-    frontCanvas.dataset.flameState = projected.state;
-    frontCanvas.dataset.interactionHold = interactionHold ? 'true' : 'false';
+      frontCtx.save();
+      frontCtx.globalCompositeOperation = 'source-over';
+      for (const particle of frontParticles) drawDefinedFlame(frontCtx, particle, strength);
+      frontCtx.restore();
+    }
 
     return {
       contract: FLAME_CONTRACT,
-      renderer: 'dual-canvas-2d-industrial-flames',
+      renderer: 'dual-canvas-defined-industrial-flames',
       strength,
       particleCount: rearParticles.length + frontParticles.length,
       rearParticleCount: rearParticles.length,
       frontParticleCount: frontParticles.length,
       maxParticles: MAX_REAR_PARTICLES + MAX_FRONT_PARTICLES,
-      state: projected.state,
-      pointerEvents: 'none',
-      frontLayer: true,
       rearLayer: true,
+      frontLayer: true,
+      pointerEvents: 'none',
     };
   }
 
   resize();
-  return {
-    canvas: rearCanvas,
-    rearCanvas,
-    frontCanvas,
-    render,
-    contract: FLAME_CONTRACT,
-  };
+  return { rearCanvas, frontCanvas, render, contract: FLAME_CONTRACT };
 }
