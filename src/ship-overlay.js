@@ -144,7 +144,7 @@ function animate(now) {
   setShipEngineState(ship, {
     thrust: warpAmount,
     coast: coastAmount,
-    time: now * 0.001,
+    time: reducedMotion ? 0 : now * 0.001,
   });
 
   desiredCamera.copy(smoothPos)
@@ -179,6 +179,7 @@ function animate(now) {
     warpAmount,
     coastAmount,
     timeFieldAmount,
+    exhaust: 'turbulent-nozzle-rooted-shader-v1',
     engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
     ship: {
       x: ship.position.x,

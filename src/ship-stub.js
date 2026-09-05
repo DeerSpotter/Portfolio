@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createEnginePlume } from './engine-plume.js';
 
 /**
  * TEMPORARY SHIP STUB
@@ -27,7 +28,6 @@ export function createShipStub({ quality = 'high' } = {}) {
   const sphereRows = low ? 10 : medium ? 14 : 20;
   const cylinderSegments = low ? 12 : medium ? 18 : 24;
   const circleSegments = low ? 14 : medium ? 20 : 28;
-  const plumeSegments = low ? 8 : medium ? 12 : 16;
 
   const hullMat = new THREE.MeshStandardMaterial({
     color: 0x8997aa,
@@ -64,14 +64,6 @@ export function createShipStub({ quality = 'high' } = {}) {
     emissiveIntensity: 0.75,
     metalness: 0.58,
     roughness: 0.24,
-  });
-  const plumeMat = new THREE.MeshBasicMaterial({
-    color: 0x73d9ff,
-    transparent: true,
-    opacity: 0.22,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
   });
 
   function addMesh(geometry, material, position, rotation, scale) {
@@ -155,14 +147,9 @@ export function createShipStub({ quality = 'high' } = {}) {
     const exhaust = addMesh(new THREE.CircleGeometry(0.17, circleSegments), engineMat, [side * 1.58, -0.01, 2.23]);
     exhaust.name = `exhaust-${side < 0 ? 'left' : 'right'}`;
 
-    const plume = addMesh(
-      new THREE.CylinderGeometry(0.025, 0.16, 2.45, plumeSegments, 1, true),
-      plumeMat.clone(),
-      [side * 1.58, -0.01, 3.48],
-      [Math.PI / 2, 0, 0]
-    );
-    plume.material.opacity = 0.16;
-    plume.userData.phase = side < 0 ? 0.25 : 2.15;
+    const plume = createEnginePlume(side < 0 ? .25 : 2.15);
+    plume.position.set(side * 1.58, -.01, 2.23);
+    ship.add(plume);
     enginePlumes.push(plume);
 
     if (quality === 'high') {
@@ -184,7 +171,6 @@ export function createShipStub({ quality = 'high' } = {}) {
   ship.userData.engineMaterial = engineMat;
   ship.userData.engineCores = engineCores;
   ship.userData.enginePlumes = enginePlumes;
-  ship.userData.plumeBaseOpacity = 0.16;
   ship.userData.quality = quality;
   ship.scale.setScalar(0.72);
   return ship;
@@ -214,12 +200,11 @@ export function setShipEngineState(ship, { thrust = 0, coast = 0, time = 0 } = {
     const slowPulse = 0.5 + 0.5 * Math.sin(time * 4.6 + phase);
     const fastFlicker = 0.5 + 0.5 * Math.sin(time * 13.4 + phase * 2.0);
     const livingIdle = coastAmount * (0.22 + slowPulse * 0.20);
-    plume.scale.y = 1 + warp * 2.6 + livingIdle;
+    plume.scale.z = .72 + warp * 1.1 + livingIdle;
     const breathe = 1 + coastAmount * (slowPulse - 0.5) * 0.10 + warp * (fastFlicker - 0.5) * 0.07;
     plume.scale.x = breathe;
-    plume.scale.z = breathe;
-    plume.material.opacity = (ship.userData.plumeBaseOpacity || 0.16)
-      + warp * (0.34 + fastFlicker * 0.06)
-      + coastAmount * (0.07 + slowPulse * 0.08);
+    plume.scale.y = breathe;
+    plume.userData.material.uniforms.time.value = time + phase;
+    plume.userData.material.uniforms.power.value = .2 + warp * .7 + coastAmount * .1;
   }
 }

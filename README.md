@@ -123,3 +123,21 @@ The same proof also exercises all six waypoint actions, hiring-brief section foc
 Both workflows run `.github/scripts/run-checks.mjs`, which captures the real output of JavaScript syntax checks, npm setup, browser installation, static packaging, and the existing browser proof. The first failed stage stops further validation. `.github/scripts/report-ci.mjs` updates the single `portfolio-baseline-ci` PR comment and writes the job summary; complete output is retained in the `portfolio-diagnostics` artifact. Only then does `.github/scripts/enforce-result.mjs` fail the job normally. GitHub Pages runs use the associated PR conversation when available.
 
 The repository is public. The runner script can also be invoked on a Linux machine with Node, npm, Python, and permission to install Chromium dependencies; the final gate can run there too. PR publication requires GitHub's event environment and a token with issue-comment permission. Fork PR tokens may lack that permission: publication errors remain explicit, and the diagnostic summary and artifact are still retained. CI does not auto-merge or repeatedly poll other workflow runs.
+
+## Procedural orbital instruments
+
+Each waypoint now has a seeded curved instrument shell, swept scanning arcs,
+cratered moons, and an asteroid field. `src/procedural-cosmos.js` generates both
+these displays and three background planetary systems with depth-sorted belts.
+`src/billboard-field.js` replaces the old rectangular flame-corona renderer.
+Its two canvas planes share the reading surface's perspective, roll, skew, and
+scale; HTML retains scrolling, keyboard access, and the hiring-brief actions.
+
+`src/flame-texture.js` builds a periodic turbulence atlas once for translucent
+amber flame flows. `src/engine-plume.js` replaces the solid engine cones with
+noise-shaded exhaust rooted at the nozzles. These are visual effects, not physical
+combustion simulations. The existing documented procedural ship stub remains.
+No new stubs, stock imagery, dependencies, or monkey patches are introduced.
+Reduced motion freezes ambient effects; narrow layouts use a compact orbital
+frame. Background bodies are cached and asteroid counts have a bounded degraded
+mode. The forward chase flight and parchment palette remain the baseline.

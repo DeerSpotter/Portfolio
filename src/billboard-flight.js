@@ -1,6 +1,6 @@
 import { waypoints } from './portfolio-content.js';
 import { showWaypoint } from './portfolio-ui.js';
-import { createBillboardSmokeRenderer } from './billboard-smoke.js';
+import { createBillboardFieldRenderer } from './billboard-field.js';
 import './time-pocket-flight.js';
 
 const billboard = document.querySelector('.detail');
@@ -10,7 +10,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TAU = Math.PI * 2;
 const INTERACTION_HOLD_MS = 3500;
 const INTERACTION_FIELD_THRESHOLD = 0.72;
-const smokeRenderer = createBillboardSmokeRenderer({ hud, billboard, reducedMotion });
+const fieldRenderer = createBillboardFieldRenderer({ hud, billboard, reducedMotion });
 
 let displayed = null;
 let lastState = '';
@@ -229,12 +229,12 @@ function render(now = performance.now()) {
   billboard.dataset.timePocket = coastStrength > 0.45 ? 'true' : 'false';
   billboard.dataset.interactionHold = hold.held ? 'true' : 'false';
 
-  const smoke = smokeRenderer.render({
+  const field = fieldRenderer.render({
     screen,
     projected,
     vanishingPoint: vanishingPoint(debug.progress),
     timeFieldStrength,
-    stopTitle: stop.title,
+    seed: 3107 + waypoints.indexOf(stop) * 7919,
     interactionHold: hold.held,
   });
 
@@ -264,15 +264,18 @@ function render(now = performance.now()) {
     skew: screen.skew,
     coastStrength,
     timeFieldStrength,
-    smokeStrength: smoke.strength,
-    smokeParticleCount: smoke.particleCount,
-    smokeRearParticleCount: smoke.rearParticleCount,
-    smokeFrontParticleCount: smoke.frontParticleCount,
-    smokeMaxParticles: smoke.maxParticles,
-    smokeRenderer: smoke.renderer,
-    smokeFrontLayer: smoke.frontLayer,
-    smokeRearLayer: smoke.rearLayer,
-    smokeContract: smoke.contract,
+    fieldStrength: field.strength,
+    flameCount: field.particleCount,
+    rearFlameCount: field.rearParticleCount,
+    frontFlameCount: field.frontParticleCount,
+    maxFlames: field.maxParticles,
+    fieldRenderer: field.renderer,
+    fieldFrontLayer: field.frontLayer,
+    fieldRearLayer: field.rearLayer,
+    fieldContract: field.contract,
+    proceduralSeed: field.seed,
+    moonCount: field.moonCount,
+    asteroidCount: field.asteroidCount,
     contract: 'approaching-skewed-interactive-billboard-v3',
   };
 

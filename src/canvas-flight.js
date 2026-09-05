@@ -1,5 +1,6 @@
 import { waypoints as stops } from './portfolio-content.js';
 import { showWaypoint } from './portfolio-ui.js';
+import { createDeepSpaceRenderer } from './procedural-cosmos.js';
 
 const canvas = document.getElementById('world');
 const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
@@ -13,6 +14,7 @@ const random = mulberry32(0x51a7f00d);
 const stars = [];
 const paperMarks = [];
 const trail = [];
+const deepSpace = createDeepSpaceRenderer();
 
 const COLORS = {
   paper: '#e7d8b8',
@@ -952,6 +954,7 @@ function animate(now) {
   if (trail.length > 40) trail.shift();
 
   clearBackground(progress);
+  const orbitalBackground = deepSpace.render(ctx, cssW, cssH, progress, degraded);
   drawPerspectiveGuide(progress);
   drawStars(progress, now);
   drawSceneCorridors(progress);
@@ -985,6 +988,7 @@ function animate(now) {
     movement: 'forward-chase-perspective',
     palette: 'fox-paper-earth',
     shipRenderer: 'original-live3d-third-person-chase',
+    orbitalBackground,
     scenery: SCENERY_CONTRACT,
     sceneryArtworkCount: scenery.length,
     sceneryHeroCount: stops.length,

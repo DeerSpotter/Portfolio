@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync('index.html', 'utf8');
 const css = readFileSync('src/billboard.css', 'utf8');
 const js = readFileSync('src/billboard-flight.js', 'utf8');
-const smoke = readFileSync('src/billboard-smoke.js', 'utf8');
+const field = readFileSync('src/billboard-field.js', 'utf8');
+const cosmos = readFileSync('src/procedural-cosmos.js', 'utf8');
+const flame = readFileSync('src/flame-texture.js', 'utf8');
 
 for (const required of [
   './src/billboard.css',
@@ -31,7 +33,6 @@ for (const behavior of [
   "data-billboard-state='arming'",
   "data-billboard-state='active'",
   "data-time-pocket='true'",
-  'billboard-scan',
   'billboard-breathe',
 ]) {
   if (!js.includes(behavior) && !css.includes(behavior)) {
@@ -39,45 +40,26 @@ for (const behavior of [
   }
 }
 
-for (const flameBehavior of [
-  "import { createBillboardSmokeRenderer } from './billboard-smoke.js'",
-  'createBillboardSmokeRenderer({ hud, billboard, reducedMotion })',
-  "FLAME_CONTRACT = 'canvas2d-anchored-flame-corona-v5'",
-  'REAR_ANCHORS',
-  'FRONT_ANCHORS',
-  "makeCanvas('billboard-flame-canvas billboard-flame-canvas-rear', 1)",
-  "makeCanvas('billboard-flame-canvas billboard-flame-canvas-front', 3)",
+for (const required of [
+  'createBillboardFieldRenderer',
+  'createFlameAtlas',
+  'drawTurbulentFlame',
+  'drawOrbitalDisplay',
+  'createOrbitalSystem',
+  'contourPoint',
+  "contract: 'procedural-orbital-instrument-v1'",
+  "renderer: 'dual-canvas-turbulent-orbital-field'",
   "canvas.setAttribute('aria-hidden', 'true')",
   "pointerEvents: 'none'",
-  'function anchorGeometry(',
-  'function flamePath(',
-  'function drawTongue(',
-  'ctx.bezierCurveTo',
-  'bright root keeps every tongue visually attached',
-  "renderer: 'dual-canvas-anchored-flame-corona'",
-  'frontTongueCount',
-  'rearTongueCount',
   'frontLayer: true',
   'rearLayer: true',
-  'smokeFrontParticleCount: smoke.frontParticleCount',
-  'smokeRearParticleCount: smoke.rearParticleCount',
-  'smokeFrontLayer: smoke.frontLayer',
-  'smokeRearLayer: smoke.rearLayer',
-  'smokeContract: smoke.contract',
 ]) {
-  if (!js.includes(flameBehavior) && !smoke.includes(flameBehavior)) {
-    throw new Error(`Anchored industrial billboard flame contract missing: ${flameBehavior}`);
+  if (![js, field, cosmos, flame].some(source => source.includes(required))) {
+    throw new Error(`Procedural orbital instrument contract missing: ${required}`);
   }
 }
-
-if (js.includes("smokeField.className = 'billboard-smoke-field'") || js.includes('SMOKE_PLUME_COUNT')) {
-  throw new Error('The old CSS plume smoke renderer is still active in billboard-flight.js.');
-}
-if (smoke.includes('function spawn(') || smoke.includes('updateParticle(')) {
-  throw new Error('Detached particle flames are still active; flames must stay anchored to the billboard perimeter.');
-}
-if (smoke.includes('function drawFlameTongue(') || smoke.includes('function drawDefinedFlame(')) {
-  throw new Error('The old detached leaf-like flame renderer is still active.');
+if (css.includes('.billboard-smoke-field') || field.includes('strokeRect') || field.includes('flamePath')) {
+  throw new Error('Superseded rectangular smoke/outlined flame implementation remains.');
 }
 if (!js.includes('return -artSide * 0.46')) {
   throw new Error('Billboard must remain opposite the section artwork.');
@@ -101,6 +83,6 @@ console.log('[portfolio-billboard] perspective=flight-direction-skew');
 console.log('[portfolio-billboard] interaction=near-range-plus-slow-pass');
 console.log('[portfolio-billboard] hold=3500ms-one-shot-camera-relative-click-window');
 console.log('[portfolio-billboard] focus=shared-latched-stop');
-console.log('[portfolio-billboard] flame=continuous-anchored-nested-bezier-corona');
-console.log('[portfolio-billboard] flamePalette=brown-olive-burnt-orange-rust');
+console.log('[portfolio-billboard] flame=periodic-turbulence-atlas');
+console.log('[portfolio-billboard] instrument=seeded-curved-shell-moons-asteroids');
 console.log('[portfolio-billboard] layering=rear-billboard-front-pointer-events-none');
