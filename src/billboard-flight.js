@@ -40,10 +40,14 @@ addEventListener('portfolio:waypoint-navigation', event => {
 
 function resumeFlight(event) {
   if (event.target instanceof Element) {
-    if (event.target.closest('.detail, dialog')) return;
-    // Button clicks select destinations; wheel/keyboard travel over the HUD
-    // still releases the reading anchor.
-    if (event.type === 'pointerdown' && event.target.closest('button, a')) return;
+    // Destination dialogs own their own scroll transaction. Never turn a
+    // briefing swipe into main-flight input.
+    if (event.target.closest('dialog')) return;
+    // A press on the flight pane may be a tap to open the destination, so keep
+    // the reading hold until actual movement occurs. touchmove/wheel/keyboard
+    // are explicit resume-flight intents and may release a pane selected from
+    // the waypoint navigation.
+    if (event.type === 'pointerdown' && event.target.closest('.detail, button, a')) return;
   }
   if (event.type === 'keydown' && !['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) return;
   if (navigationPose || focusPose) releasePose = { ...(navigationPose || focusPose), started: performance.now() };
