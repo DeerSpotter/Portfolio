@@ -148,7 +148,16 @@ await page.locator('.close-button').click();
 
 // Text and all six controls must remain reachable on narrow and short screens.
 for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }, { width: 844, height: 390 }]) {
+  console.log(`[portfolio-hiring] Checking viewport ${viewport.width}x${viewport.height}`);
   await page.setViewportSize(viewport);
+  const layout = await page.evaluate(() => {
+    const card = document.querySelector('.detail').getBoundingClientRect();
+    const footer = document.querySelector('.hud-bottom').getBoundingClientRect();
+    return { cardBottom: card.bottom, navigationTop: footer.top };
+  });
+  if (layout.cardBottom > layout.navigationTop + 1) {
+    throw new Error(`Content overlaps navigation at ${viewport.width}x${viewport.height}: card bottom=${layout.cardBottom}, navigation top=${layout.navigationTop}`);
+  }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   if (overflow) throw new Error(`Horizontal overflow at ${viewport.width}x${viewport.height}.`);
   await page.locator('[data-stop="3"]').click();

@@ -12,9 +12,14 @@ const marker = '<!-- portfolio-baseline-ci -->';
 const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
 const runUrl = `${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 const revision = event.pull_request?.head.sha || process.env.GITHUB_SHA;
-const excerpt = diagnostic.length > 18000
-  ? `${diagnostic.slice(0, 1000)}\n\n[Middle omitted; complete output is attached to this run.]\n\n${diagnostic.slice(-16000)}`
-  : diagnostic;
+// Lead with the failing stage's actual output. Installation logs stay in the
+// complete artifact instead of burying the actionable browser error.
+const stageMarker = `[stage] ${result.stage}\n`;
+const stageStart = result.status !== 0 ? diagnostic.lastIndexOf(stageMarker) : -1;
+const focusedDiagnostic = stageStart >= 0 ? diagnostic.slice(stageStart) : diagnostic;
+const excerpt = focusedDiagnostic.length > 18000
+  ? `${focusedDiagnostic.slice(0, 1000)}\n\n[Middle omitted; complete output is attached to this run.]\n\n${focusedDiagnostic.slice(-16000)}`
+  : focusedDiagnostic;
 // Escape accidental Markdown fences from tool output without changing the log.
 const fence = '`'.repeat(Math.max(3, ...[...excerpt.matchAll(/`+/g)].map(match => match[0].length + 1)));
 const body = `${marker}\n## Portfolio checks: ${result.status === 0 ? 'PASS' : 'FAIL'}\n\n**${result.stage}**\n\nRevision: \`${revision}\`\nTested checkout: \`${process.env.GITHUB_SHA}\`\n[Run and complete diagnostic artifact](${runUrl})\n\n${fence}text\n${excerpt}\n${fence}`;

@@ -152,7 +152,8 @@ blockquote cite { display: block; margin-top: 15px; font: .8125rem/1.5 var(--mon
   .hint { margin-bottom: 7px; }
 }
 @media (max-height: 520px), (max-height: 740px) and (max-width: 600px) {
-  #hud { overflow-y: auto; overscroll-behavior: contain; grid-template-rows: auto auto auto; pointer-events: auto; }
+  #hud { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; }
+  .hud-top, .detail, .hud-bottom { flex: 0 0 auto; }
   .detail { max-height: none; }
 }
 @media (prefers-reduced-motion: reduce) {
