@@ -64,7 +64,25 @@
   .detail h2 { font-size: .68rem; line-height: 1.08; letter-spacing: -.04em; }
   .detail p, .detail .detail-proof { margin-top: 4px; font-size: .48rem; line-height: 1.26; }
   .detail .detail-proof { padding-top: 4px; }
-  .detail-action { min-height: 23px; margin-top: 3px; font-size: .44rem; }
+  .detail-action {
+    display: inline-flex;
+    align-items: center;
+    min-height: 0;
+    margin-top: 4px;
+    padding: 1px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: .4rem;
+    line-height: 1.12;
+    text-decoration: underline;
+    text-underline-offset: .22em;
+  }
+  .detail .detail-action:focus-visible {
+    outline: 1px solid #efb874;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
   .detail .waypoint-status { margin-top: 3px; font-size: .34rem; line-height: 1.18; }
 
   .hud-bottom {
@@ -172,6 +190,7 @@
   .detail { width: min(164px, 50vw); max-height: 34vh; padding: 6px 7px; }
   .detail h2 { font-size: .64rem; }
   .detail p, .detail .detail-proof { font-size: .45rem; }
+  .detail-action { font-size: .37rem; }
   .waypoint-nav button { min-height: 22px; padding-inline: 2px; font-size: .38rem; }
   .chapter { min-width: 58px; }
   #destination .destination-content.destination-briefing-card { width: 96%; }
@@ -190,7 +209,7 @@
   .detail { width: min(155px, 28vw); max-height: 42vh; padding: 6px 7px; }
   .detail h2 { font-size: .6rem; }
   .detail p, .detail .detail-proof { font-size: .42rem; line-height: 1.2; }
-  .detail-action { min-height: 21px; }
+  .detail-action { font-size: .35rem; }
   .hint { font-size: .35rem; }
   .waypoint-nav button { min-height: 21px; padding: 2px; font-size: .36rem; }
   .chapter .name { font-size: .5rem; }
@@ -199,31 +218,13 @@
   #destination .destination-stage-panel { padding: 9px 11px; }
 }
 
-/* Reduced motion keeps the game composition but freezes the billboard at one
-   compact reading plane instead of expanding it into normal document flow. */
+/* Reduce Motion removes autonomous animation but keeps the same spatial
+   projection as desktop/mobile flight. Scroll position still selects the
+   reading plane, including the correct left/right side for each waypoint. */
 @media (prefers-reduced-motion: reduce) and (max-width: 700px),
        (prefers-reduced-motion: reduce) and (max-width: 900px) and (max-height: 600px) {
-  .detail {
-    grid-row: auto;
-    position: absolute;
-    left: 0;
-    top: 0;
-    align-self: auto;
-    justify-self: auto;
-    transform:
-      translate3d(50vw, 46vh, 0)
-      translate(-50%, -50%)
-      scale(.82);
-    opacity: 1;
-    pointer-events: auto;
-    will-change: auto;
-  }
+  .detail,
   .billboard-field-canvas {
-    transform:
-      translate3d(50vw, 46vh, 0)
-      translate(-50%, -50%)
-      scale(.82) !important;
-    opacity: 1 !important;
     will-change: auto;
   }
 }

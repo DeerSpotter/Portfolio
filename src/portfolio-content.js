@@ -6,7 +6,7 @@ export const waypoints = [
     at: 0.04, title: 'Start here', color: '#cf6f2f', side: -0.20, lift: -0.02, visual: 'entry-vista',
     kicker: '01 / The case for hiring me',
     heading: 'Give AI someone who knows what matters.',
-    body: 'I bring the judgment of someone who has designed hardware, untangled engineering workflows, and helped teams use difficult systems. AI lets me turn that experience into software.',
+    body: 'I bring the insight of someone who has designed hardware, untangled engineering workflows, and helped teams use difficult systems. AI lets me turn that experience into software.',
     proof: 'My advantage is connecting the problem, the implementation, and the person who has to use the result.',
     action: 'See the hiring case', section: 'briefTitle',
   },
