@@ -259,9 +259,9 @@ function animate(now) {
   // point from one side of the ship to the other and makes the ship appear to
   // launch across the viewport. Do not rewrite the route. Instead, only in this
   // seam corridor, attach the camera basis to the already rendered ship body.
-  // Blend by wrapped yaw and pitch rather than normalized vector lerp: linear
-  // interpolation of nearly opposite unit vectors collapses toward zero and can
-  // itself create the one-frame camera flip that this seam path is preventing.
+  // Blend by wrapped yaw and pitch rather than normalized vector lerp. A linear
+  // blend of nearly opposite unit vectors can collapse toward zero, so its
+  // normalization can create the exact one-frame flip this seam path prevents.
   shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
   const cameraSeamBlend = seamCameraBlend(progress);
   blendForwardDirection(cameraForward, smoothTangent, shipForward, cameraSeamBlend);
