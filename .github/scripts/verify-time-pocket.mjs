@@ -15,6 +15,7 @@ for (const required of [
   'coastCarry += COAST_RATE_PX_PER_SECOND * dt',
   'syntheticScrollUntil = performance.now() + 90',
   'scrollBy(0, distance)',
+  'const deliberateJump = nearest.stop !== lockedStop',
   'lockedStop?.title || null',
 ]) {
   if (!controller.includes(required)) throw new Error(`Time-pocket behavior missing: ${required}`);
@@ -62,5 +63,6 @@ console.log('[portfolio-time-pocket] PASS');
 console.log('[portfolio-time-pocket] idle=cinematic-slow-pass');
 console.log('[portfolio-time-pocket] coast=9px/s-native-scroll');
 console.log('[portfolio-time-pocket] focus=latched-no-waypoint-01-reset');
+console.log('[portfolio-time-pocket] reverseJump=destination-reacquire');
 console.log('[portfolio-time-pocket] ship=smoothed-route-and-camera');
 console.log('[portfolio-time-pocket] engines=animated-idle-to-thrust');
