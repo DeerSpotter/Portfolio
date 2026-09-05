@@ -42,9 +42,9 @@ for (const behavior of [
 for (const flameBehavior of [
   "import { createBillboardSmokeRenderer } from './billboard-smoke.js'",
   'createBillboardSmokeRenderer({ hud, billboard, reducedMotion })',
-  "FLAME_CONTRACT = 'canvas2d-industrial-edge-flame-v3'",
-  'MAX_REAR_PARTICLES = 58',
-  'MAX_FRONT_PARTICLES = 34',
+  "FLAME_CONTRACT = 'canvas2d-defined-industrial-flame-v4'",
+  'MAX_REAR_PARTICLES = 42',
+  'MAX_FRONT_PARTICLES = 28',
   'INDUSTRIAL_PALETTES',
   "makeCanvas('billboard-flame-canvas billboard-flame-canvas-rear', 1)",
   "makeCanvas('billboard-flame-canvas billboard-flame-canvas-front', 3)",
@@ -52,11 +52,13 @@ for (const flameBehavior of [
   "pointerEvents: 'none'",
   'function frontEmissionRate(',
   'function rearEmissionRate(',
-  'function drawFlameTongue(',
-  'ctx.quadraticCurveTo',
-  'createLinearGradient',
-  'interactionHold ? 0.33',
-  "renderer: 'dual-canvas-2d-industrial-flames'",
+  'function flamePath(',
+  'function drawDefinedFlame(',
+  'ctx.bezierCurveTo',
+  'ctx.strokeStyle = rgba(particle.palette.outer',
+  'Small ember kernel right on the card edge',
+  'interactionHold ? 0.42',
+  "renderer: 'dual-canvas-defined-industrial-flames'",
   'frontLayer: true',
   'rearLayer: true',
   'smokeFrontParticleCount: smoke.frontParticleCount',
@@ -66,7 +68,7 @@ for (const flameBehavior of [
   'smokeContract: smoke.contract',
 ]) {
   if (!js.includes(flameBehavior) && !smoke.includes(flameBehavior)) {
-    throw new Error(`Industrial billboard flame contract missing: ${flameBehavior}`);
+    throw new Error(`Defined industrial billboard flame contract missing: ${flameBehavior}`);
   }
 }
 
@@ -75,6 +77,9 @@ if (js.includes("smokeField.className = 'billboard-smoke-field'") || js.includes
 }
 if (smoke.includes("canvas.className = 'billboard-smoke-canvas'")) {
   throw new Error('The old single behind-card smoke canvas is still active.');
+}
+if (smoke.includes('function drawFlameTongue(')) {
+  throw new Error('The translucent leaf-like v3 flame tongue renderer is still active.');
 }
 if (!js.includes('return -artSide * 0.46')) {
   throw new Error('Billboard must remain opposite the section artwork.');
@@ -98,6 +103,6 @@ console.log('[portfolio-billboard] perspective=flight-direction-skew');
 console.log('[portfolio-billboard] interaction=near-range-plus-slow-pass');
 console.log('[portfolio-billboard] hold=3500ms-one-shot-camera-relative-click-window');
 console.log('[portfolio-billboard] focus=shared-latched-stop');
-console.log('[portfolio-billboard] flame=dual-canvas-industrial-edge-tongues');
-console.log('[portfolio-billboard] flamePalette=charcoal-brown-olive-orange-rust');
+console.log('[portfolio-billboard] flame=defined-nested-bezier-tongues');
+console.log('[portfolio-billboard] flamePalette=brown-olive-burnt-orange-rust');
 console.log('[portfolio-billboard] layering=rear-billboard-front-pointer-events-none');
