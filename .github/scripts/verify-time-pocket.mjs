@@ -8,14 +8,17 @@ const stub = readFileSync('src/ship-stub.js', 'utf8');
 const css = readFileSync('src/billboard.css', 'utf8');
 
 for (const required of [
-  "contract: 'cinematic-slow-pass-v1'",
+  "contract: 'cinematic-time-dilation-pass-v2'",
   'COAST_DELAY_MS = 170',
-  'COAST_RATE_PX_PER_SECOND = 9',
+  'COAST_RATE_FAR = 12',
+  'COAST_RATE_NEAR = 4.5',
+  'TIME_FIELD_RADIUS = 0.085',
   "mode = canCoast ? 'time-pocket' : 'flight'",
-  'coastCarry += COAST_RATE_PX_PER_SECOND * dt',
+  'coastCarry += rate * dt',
   'syntheticScrollUntil = performance.now() + 90',
   'scrollBy(0, distance)',
   'const deliberateJump = nearest.stop !== lockedStop',
+  'timeFieldStrength: field.strength',
   'lockedStop?.title || null',
 ]) {
   if (!controller.includes(required)) throw new Error(`Time-pocket behavior missing: ${required}`);
@@ -30,11 +33,15 @@ if (!ui.includes('window.__portfolioTimePocketDebug?.lockedStop')) {
 if (!billboard.includes('window.__portfolioTimePocketDebug?.lockedStop')) {
   throw new Error('Billboard does not honor the shared latched stop.');
 }
+if (!billboard.includes("billboard.style.setProperty('--time-field'")) {
+  throw new Error('Billboard glow is not tied to time-field proximity.');
+}
 
 for (const required of [
   'smoothTangent',
   'filteredVelocity',
   'coastAmount',
+  'timeFieldAmount',
   "engineState: coastAmount > 0.45 ? 'idle-drift'",
   'setShipEngineState',
 ]) {
@@ -55,14 +62,19 @@ if (stub.includes('export function setShipWarp')) {
 if (css.includes('steps(2, end)')) {
   throw new Error('Stepped billboard flicker returned; activation should be smooth.');
 }
-if (!css.includes('billboard-breathe')) {
-  throw new Error('Slow-pass billboard breathing state is missing.');
+for (const required of [
+  'billboard-breathe',
+  "body[data-flight-mode='time-pocket'] #world",
+  '--time-field: 0',
+]) {
+  if (!css.includes(required)) throw new Error(`Time-field visual focus missing: ${required}`);
 }
 
 console.log('[portfolio-time-pocket] PASS');
-console.log('[portfolio-time-pocket] idle=cinematic-slow-pass');
-console.log('[portfolio-time-pocket] coast=9px/s-native-scroll');
+console.log('[portfolio-time-pocket] idle=cinematic-time-dilation-pass');
+console.log('[portfolio-time-pocket] coast=12px/s-far->4.5px/s-near');
 console.log('[portfolio-time-pocket] focus=latched-no-waypoint-01-reset');
 console.log('[portfolio-time-pocket] reverseJump=destination-reacquire');
-console.log('[portfolio-time-pocket] ship=smoothed-route-and-camera');
+console.log('[portfolio-time-pocket] artwork=quieted-not-hidden');
+console.log('[portfolio-time-pocket] ship=smoothed-route-camera-and-field');
 console.log('[portfolio-time-pocket] engines=animated-idle-to-thrust');
