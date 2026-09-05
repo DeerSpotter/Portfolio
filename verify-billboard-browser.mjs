@@ -157,8 +157,10 @@ try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready, null, { timeout: 15000 });
 
-  // Traverse forward only. The outgoing Start here pane is allowed to finish
-  // its new side-fade before Engineering becomes the current pane.
+  // This proof intentionally advances progress monotonically. A previous test
+  // jumped backward from 0.94 to 0.00 across the closed-route seam, which is
+  // not representative of normal forward flight and conflicts with preserving
+  // the outgoing pane until its side fade is complete.
   const engineeringApproaching = await moveTo(0.110);
   const engineeringArming = await moveTo(0.145);
   const engineeringActive = await moveTo(0.178);
@@ -177,8 +179,6 @@ try {
     -1,
   );
 
-  // Continue forward into Vault. This proves the same choreography in the
-  // opposite direction without resetting or jumping backward through the loop.
   const vaultApproaching = await moveTo(0.270);
   const vaultArming = await moveTo(0.305);
   const vaultActive = await moveTo(0.338);
