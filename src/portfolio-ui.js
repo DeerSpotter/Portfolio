@@ -1,5 +1,6 @@
 import { waypoints } from './portfolio-content.js';
 import { openDestination } from './destination-ui.js';
+import './touch-flight-input.js';
 
 const brief = document.getElementById('hiringBrief');
 const navigation = [...document.querySelectorAll('[data-stop]')];
