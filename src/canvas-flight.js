@@ -30,6 +30,7 @@ const COLORS = {
 };
 
 const SCENERY_CONTRACT = 'layered-side-scenes-v1';
+const RIBBON_CONTRACT = 'scene-spanning-parallax-ribbons-v1';
 const LAYER_OFFSETS = [
   { delta: -0.033, depth: 0.78, sideScale: 0.90, liftDelta: -0.055, detail: 0.56, role: 'lead' },
   { delta: 0.000, depth: 1.00, sideScale: 1.00, liftDelta: 0.000, detail: 1.00, role: 'hero' },
@@ -764,7 +765,7 @@ function drawWorldObjects(progress, now) {
   }
 }
 
-function nearestStop(progress) {
+function closestStop(progress) {
   let best = null;
   let bestDist = Infinity;
 
@@ -776,7 +777,12 @@ function nearestStop(progress) {
     }
   }
 
-  return bestDist < 0.055 ? best : null;
+  return { stop: best, distance: bestDist };
+}
+
+function nearestStop(progress) {
+  const closest = closestStop(progress);
+  return closest.distance < 0.055 ? closest.stop : null;
 }
 
 function drawTrail(points, color, width, alpha) {
@@ -801,53 +807,124 @@ function drawTrail(points, color, width, alpha) {
   ctx.restore();
 }
 
-function drawOrbitCurl(stop, progress, now) {
-  if (!stop) return;
+function cubicPoint(a, b, c, d, t) {
+  const mt = 1 - t;
+  return mt * mt * mt * a
+    + 3 * mt * mt * t * b
+    + 3 * mt * t * t * c
+    + t * t * t * d;
+}
 
-  const target = projectObject(stop, progress, 1.0);
-  if (!target) return;
-
-  const ship = shipPoint(progress);
-  const phase = now * 0.00115;
+function drawHelicalRibbon(start, c1, c2, end, options) {
+  const {
+    phase,
+    turns,
+    radius,
+    verticalScale,
+    color,
+    width,
+    alpha,
+    direction,
+  } = options;
+  const steps = degraded ? 46 : 76;
 
   ctx.save();
-  ctx.strokeStyle = stop.color;
-  ctx.lineWidth = 2.5;
-  ctx.globalAlpha = 0.76;
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.beginPath();
-  ctx.moveTo(ship.x - 4, ship.y + 18);
-  ctx.bezierCurveTo(
-    ship.x - 44,
-    ship.y + 56,
-    target.x - 54 * Math.sign(stop.side || 1),
-    target.y + 28,
-    target.x - 28 * Math.sign(stop.side || 1),
-    target.y,
-  );
 
-  for (let i = 0; i <= 40; i++) {
-    const a = phase + i / 40 * TAU * 1.45;
-    const rr = 30 - i * 0.42;
-    ctx.lineTo(
-      target.x + Math.cos(a) * rr,
-      target.y + Math.sin(a) * rr * 0.50,
-    );
-  }
-  ctx.stroke();
-
-  ctx.globalAlpha = 0.28;
-  ctx.lineWidth = 1.1;
-  ctx.beginPath();
-  for (let i = 0; i <= 34; i++) {
-    const a = -phase * 0.72 + i / 34 * TAU * 1.25;
-    const rr = 39 - i * 0.54;
-    const x = target.x + Math.cos(a) * rr;
-    const y = target.y + Math.sin(a) * rr * 0.46;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const cx = cubicPoint(start.x, c1.x, c2.x, end.x, t);
+    const cy = cubicPoint(start.y, c1.y, c2.y, end.y, t);
+    const envelope = Math.sin(Math.PI * t);
+    const swell = radius * envelope * (0.42 + t * 0.92);
+    const angle = phase + direction * t * TAU * turns;
+    const x = cx + Math.cos(angle) * swell;
+    const y = cy + Math.sin(angle) * swell * verticalScale;
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
-  ctx.stroke();
 
+  ctx.stroke();
   ctx.restore();
+}
+
+function drawFlightRibbons(stop, progress, now, emphasized) {
+  if (!stop) return;
+
+  const ship = shipPoint(progress);
+  const vp = vanishingPoint(progress);
+  const art = projectObject(stop, progress, 1.02);
+  const billboardSide = -Math.sign(stop.side || 1) * 0.46;
+  const billboard = projectObject({ ...stop, side: billboardSide, lift: 0 }, progress, 0.90);
+  const intensity = emphasized ? 1 : 0.48;
+  const phase = reducedMotion ? 0 : now * 0.0019;
+  const artEnd = art || {
+    x: cssW * (0.5 + Math.sign(stop.side || 1) * 0.38),
+    y: cssH * 0.42,
+  };
+  const billboardEnd = billboard || {
+    x: cssW * (0.5 + billboardSide * 0.62),
+    y: cssH * 0.46,
+  };
+
+  // Two large opposing strands make the flight path wrap between the artwork
+  // and the text billboard instead of curling harmlessly under the ship.
+  drawHelicalRibbon(
+    { x: ship.x - 16, y: ship.y + 20 },
+    { x: ship.x - cssW * 0.18, y: ship.y + cssH * 0.24 },
+    { x: vp.x + cssW * 0.30 * Math.sign(stop.side || 1), y: cssH * 0.17 },
+    artEnd,
+    {
+      phase,
+      turns: 2.9,
+      radius: Math.min(cssW, cssH) * 0.15,
+      verticalScale: 0.62,
+      color: stop.color,
+      width: 3.3 + intensity * 2.2,
+      alpha: 0.28 + intensity * 0.42,
+      direction: 1,
+    },
+  );
+
+  drawHelicalRibbon(
+    { x: ship.x + 16, y: ship.y + 18 },
+    { x: ship.x + cssW * 0.20, y: ship.y + cssH * 0.20 },
+    { x: vp.x - cssW * 0.34 * Math.sign(stop.side || 1), y: cssH * 0.15 },
+    billboardEnd,
+    {
+      phase: -phase * 0.82 + 1.4,
+      turns: 3.35,
+      radius: Math.min(cssW, cssH) * 0.18,
+      verticalScale: 0.58,
+      color: COLORS.fox,
+      width: 2.5 + intensity * 1.8,
+      alpha: 0.22 + intensity * 0.38,
+      direction: -1,
+    },
+  );
+
+  // A thinner high arc crosses the scene and prevents the ribbon language from
+  // collapsing into a bottom-of-screen exhaust effect.
+  drawHelicalRibbon(
+    { x: vp.x, y: vp.y + 8 },
+    { x: cssW * 0.04, y: cssH * 0.10 },
+    { x: cssW * 0.96, y: cssH * 0.24 },
+    { x: ship.x, y: ship.y + 34 },
+    {
+      phase: phase * 0.62 + 2.2,
+      turns: 2.25,
+      radius: Math.min(cssW, cssH) * 0.11,
+      verticalScale: 0.72,
+      color: COLORS.olive,
+      width: 1.2 + intensity * 1.0,
+      alpha: 0.13 + intensity * 0.22,
+      direction: 1,
+    },
+  );
 }
 
 function adaptPerformance(dt, now) {
@@ -874,11 +951,7 @@ function adaptPerformance(dt, now) {
 }
 
 function updatePanel(progress) {
-  const current = activeStop || stops.reduce((best, stop) => {
-    const d = Math.abs(wrapSigned(stop.at - progress));
-    return !best || d < best.d ? { stop, d } : best;
-  }, null).stop;
-
+  const current = activeStop || closestStop(progress).stop;
   showWaypoint(current);
 }
 
@@ -911,10 +984,11 @@ function animate(now) {
   drawStars(progress, now);
   drawSceneCorridors(progress);
   drawWorldObjects(progress, now);
-  drawTrail(trailGhost, COLORS.olive, 1.0, 0.20);
-  drawTrail(trail, COLORS.fox, 2.3, 0.64);
+  drawTrail(trailGhost, COLORS.olive, 1.0, 0.16);
+  drawTrail(trail, COLORS.fox, 1.7, 0.38);
 
-  if (activeStop) drawOrbitCurl(activeStop, progress, now);
+  const ribbonStop = activeStop || closestStop(progress).stop;
+  drawFlightRibbons(ribbonStop, progress, now, Boolean(activeStop));
 
   if (now % 100 < 17) {
     velocityEl.textContent = (Math.abs(velocity) * 100).toFixed(1);
@@ -944,6 +1018,8 @@ function animate(now) {
     sceneryArtworkCount: scenery.length,
     sceneryHeroCount: stops.length,
     lateralPerspective: 'accelerated-side-growth',
+    ribbon: RIBBON_CONTRACT,
+    ribbonStrands: 3,
   };
 
   requestAnimationFrame(animate);
