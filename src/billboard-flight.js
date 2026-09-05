@@ -144,11 +144,19 @@ function project(stop, progress, coastStrength) {
   const x = vp.x
     + (laneX - vp.x) * lateralPerspective * pocketEase
     + side * innerWidth * 0.44 * pass;
-  const y = vp.y
+  let y = vp.y
     + (laneY - vp.y) * forwardPerspective
     + innerHeight * 0.16 * pass;
 
-  const scale = 0.12 + Math.pow(t, 1.44) * 1.10 + pass * 0.18;
+  let scale = 0.12 + Math.pow(t, 1.44) * 1.10 + pass * 0.18;
+  // Short landscape phones have far less vertical flight corridor between the
+  // identity HUD and waypoint controls. Compact the actual projected pose so
+  // the text card and both procedural field planes remain numerically aligned.
+  const shortLandscape = innerWidth <= 900 && innerWidth > innerHeight && innerHeight <= 500;
+  if (shortLandscape) {
+    scale *= 0.78;
+    y -= innerHeight * 0.045;
+  }
   const alpha = clamp(0.10 + t * 1.18 - pass * 0.40, 0.07, 1);
 
   const yaw = side * (-36 + t * 25 - pass * 20);
