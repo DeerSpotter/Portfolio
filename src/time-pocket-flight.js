@@ -14,6 +14,7 @@ let syntheticScrollUntil = 0;
 let coastCarry = 0;
 let lockedStop = null;
 let mode = 'flight';
+let lastDomMode = '';
 let coastStrength = 0;
 
 function wrap01(value) {
@@ -114,6 +115,11 @@ function animate(now) {
   const idleFor = now - lastUserInputTime;
   const canCoast = !reducedMotion && idleFor >= COAST_DELAY_MS && !document.body.classList.contains('reading-brief');
   mode = canCoast ? 'time-pocket' : 'flight';
+
+  if (mode !== lastDomMode) {
+    lastDomMode = mode;
+    document.body.dataset.flightMode = mode;
+  }
 
   const targetCoast = canCoast ? 1 : 0;
   coastStrength += (targetCoast - coastStrength) * (1 - Math.exp(-4.4 * dt));
