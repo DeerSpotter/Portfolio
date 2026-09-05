@@ -41,6 +41,7 @@ try {
   await run('Syntax: browser proof', process.execPath, ['--check', 'verify-canvas.mjs']);
   await run('Syntax: billboard browser proof', process.execPath, ['--check', 'verify-billboard-browser.mjs']);
   await run('Syntax: destination browser proof', process.execPath, ['--check', 'verify-destination-browser.mjs']);
+  await run('Syntax: mobile browser proof', process.execPath, ['--check', 'verify-mobile-browser.mjs']);
   await run('Syntax: time-pocket browser proof', process.execPath, ['--check', 'verify-time-pocket-browser.mjs']);
   await run('Layered scenery contract', process.execPath, ['.github/scripts/verify-scenery.mjs']);
   await run('Interactive billboard contract', process.execPath, ['.github/scripts/verify-billboard.mjs']);
@@ -85,6 +86,7 @@ try {
   await run('Flight baseline and hiring experience', process.execPath, ['verify-canvas.mjs']);
   await run('Billboard depth and interaction experience', process.execPath, ['verify-billboard-browser.mjs']);
   await run('Destination arrival briefing experience', process.execPath, ['verify-destination-browser.mjs']);
+  await run('Mobile compact game HUD experience', process.execPath, ['verify-mobile-browser.mjs']);
   await run('Cinematic slow-pass experience', process.execPath, ['verify-time-pocket-browser.mjs']);
   result = { status: 0, stage: 'All checks passed' };
 } catch (error) {
