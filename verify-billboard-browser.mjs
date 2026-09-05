@@ -157,9 +157,8 @@ try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready, null, { timeout: 15000 });
 
-  // Advance monotonically, matching the normal forward-flight experience. The
-  // outgoing pane is allowed to finish its side fade before the next pane owns
-  // the single billboard surface.
+  // Forward-only traversal matches normal flight and allows each outgoing pane
+  // to finish its side fade before the next pane owns the single surface.
   const engineeringApproaching = await moveTo(0.110);
   const engineeringArming = await moveTo(0.145);
   const engineeringActive = await moveTo(0.178);
