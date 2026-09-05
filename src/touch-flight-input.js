@@ -1,22 +1,20 @@
 // Touch devices do not emit the wheel-edge gesture used by desktop flight.
-// Keep touch interpretation separate from loop state: this adapter reports a
-// semantic flight-loop intent, while canvas-flight remains the single owner of
-// loopCycle, scroll recycling, travel continuity, and telemetry.
+// Keep touch interpretation separate from loop state: this adapter reports
+// semantic loop intent while canvas-flight remains the owner of loopCycle,
+// travel continuity, rendering, and telemetry.
 const EDGE_PX = 3;
 const MIN_GESTURE_PX = 18;
 const LOOP_INTENT_EVENT = 'portfolio-flight-loop-intent';
 const BLOCKED_SWIPE_SELECTOR = 'dialog, button, a, input, textarea, select, [contenteditable="true"]';
 const SEAM_ENTRY_PROGRESS = 0.93;
 const SEAM_EXIT_PROGRESS = 0.08;
-const SEAM_ASSIST_DURATION_MS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 520 : 760;
 
 let startY = null;
 let lastY = null;
 let travelY = 0;
 let blocked = false;
 let deliveredDuringGesture = false;
-let seamAssistActive = false;
-let manualAfterAssist = false;
+let manualAfterSeam = false;
 
 function resetGesture() {
   startY = null;
@@ -24,7 +22,7 @@ function resetGesture() {
   travelY = 0;
   blocked = false;
   deliveredDuringGesture = false;
-  manualAfterAssist = false;
+  manualAfterSeam = false;
 }
 
 function scrollMetrics() {
@@ -48,55 +46,23 @@ function sendLoopIntent(direction) {
   }));
 }
 
-function easeInOutCubic(t) {
-  return t < 0.5
-    ? 4 * t * t * t
-    : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-function startForwardSeamAssist() {
-  if (seamAssistActive) return false;
+function carryForwardAcrossSeam() {
+  if (manualAfterSeam) return false;
 
   const { maxScroll, local } = scrollMetrics();
   if (local < SEAM_ENTRY_PROGRESS) return false;
 
-  seamAssistActive = true;
-  manualAfterAssist = false;
   deliveredDuringGesture = true;
+  manualAfterSeam = true;
 
-  const startProgress = local;
-  const totalProgress = 1 + SEAM_EXIT_PROGRESS - startProgress;
-  const startedAt = performance.now();
-  let wrapped = false;
-
-  function advance(now) {
-    const elapsed = Math.max(0, now - startedAt);
-    const t = Math.min(1, elapsed / SEAM_ASSIST_DURATION_MS);
-    const unwrappedProgress = startProgress + totalProgress * easeInOutCubic(t);
-
-    if (unwrappedProgress < 1) {
-      scrollTo(0, maxScroll * unwrappedProgress);
-    } else {
-      if (!wrapped) {
-        scrollTo(0, maxScroll);
-        sendLoopIntent(1);
-        wrapped = true;
-      }
-      scrollTo(0, maxScroll * Math.min(SEAM_EXIT_PROGRESS, unwrappedProgress - 1));
-    }
-
-    if (t < 1) {
-      requestAnimationFrame(advance);
-      return;
-    }
-
-    scrollTo(0, maxScroll * SEAM_EXIT_PROGRESS);
-    seamAssistActive = false;
-    manualAfterAssist = startY !== null;
-    travelY = 0;
-  }
-
-  requestAnimationFrame(advance);
+  // One atomic controller handoff. There is deliberately no animation loop
+  // writing scrollY: the existing canvas travel damper performs the visible
+  // fly-through from late 06 to the new lap. We only move the hidden scroll
+  // controller to the real edge, let canvas-flight advance loopCycle, then
+  // place that controller just beyond waypoint 01 (0.04) at 0.08.
+  scrollTo(0, maxScroll);
+  sendLoopIntent(1);
+  scrollTo(0, maxScroll * SEAM_EXIT_PROGRESS);
   return true;
 }
 
@@ -104,7 +70,7 @@ function deliverActiveGesture() {
   if (blocked || deliveredDuringGesture || startY === null || Math.abs(travelY) < MIN_GESTURE_PX) return false;
 
   const direction = Math.sign(travelY);
-  if (direction > 0 && startForwardSeamAssist()) return true;
+  if (direction > 0 && carryForwardAcrossSeam()) return true;
   if (!documentEdge(direction)) return false;
 
   deliveredDuringGesture = true;
@@ -113,7 +79,7 @@ function deliverActiveGesture() {
 }
 
 function deliverCompletedGesture(direction) {
-  if (direction > 0 && startForwardSeamAssist()) return;
+  if (direction > 0 && carryForwardAcrossSeam()) return;
 
   if (documentEdge(direction)) {
     sendLoopIntent(direction);
@@ -121,7 +87,7 @@ function deliverCompletedGesture(direction) {
   }
 
   // Mobile Safari can finish updating scrollY after touchend has fired. Check
-  // once on the next frame as a fallback for non-assisted edge gestures.
+  // once on the next frame only for ordinary non-assisted edge gestures.
   requestAnimationFrame(() => {
     if (documentEdge(direction)) sendLoopIntent(direction);
   });
@@ -135,7 +101,7 @@ addEventListener('touchstart', event => {
   lastY = touch.clientY;
   travelY = 0;
   deliveredDuringGesture = false;
-  manualAfterAssist = false;
+  manualAfterSeam = false;
 }, { passive: true });
 
 addEventListener('touchmove', event => {
@@ -146,12 +112,10 @@ addEventListener('touchmove', event => {
   const deltaY = lastY - touch.clientY;
   lastY = touch.clientY;
 
-  if (seamAssistActive) {
-    event.preventDefault();
-    return;
-  }
-
-  if (manualAfterAssist) {
+  // Once the seam handoff has happened, Safari no longer owns this particular
+  // finger-down transaction. Apply its remaining movement directly to the new
+  // lap so the user never meets a document boundary or has to release first.
+  if (manualAfterSeam) {
     event.preventDefault();
     scrollBy(0, deltaY);
     return;
@@ -160,7 +124,7 @@ addEventListener('touchmove', event => {
   travelY += deltaY;
   if (travelY > MIN_GESTURE_PX && scrollMetrics().local >= SEAM_ENTRY_PROGRESS) {
     event.preventDefault();
-    startForwardSeamAssist();
+    carryForwardAcrossSeam();
     return;
   }
 
@@ -168,7 +132,7 @@ addEventListener('touchmove', event => {
 }, { passive: false });
 
 addEventListener('touchend', () => {
-  if (blocked || startY === null || seamAssistActive || manualAfterAssist || deliveredDuringGesture || Math.abs(travelY) < MIN_GESTURE_PX) {
+  if (blocked || startY === null || manualAfterSeam || deliveredDuringGesture || Math.abs(travelY) < MIN_GESTURE_PX) {
     resetGesture();
     return;
   }
@@ -181,13 +145,13 @@ addEventListener('touchend', () => {
 addEventListener('touchcancel', resetGesture, { passive: true });
 
 window.__portfolioTouchFlightDebug = {
-  contract: 'touch-edge-to-flight-loop-v3',
+  contract: 'touch-edge-to-flight-loop-v5',
   edgePx: EDGE_PX,
   minimumGesturePx: MIN_GESTURE_PX,
-  delivery: 'active-gesture-edge-intent-with-touchend-fallback',
+  delivery: 'one-shot-seam-handoff-with-same-gesture-control',
   blockedSelector: BLOCKED_SWIPE_SELECTOR,
-  seamAssist: 'auto-06-through-01-v1',
+  seamAssist: 'single-controller-jump-06-through-01-v3',
   seamEntryProgress: SEAM_ENTRY_PROGRESS,
   seamExitProgress: SEAM_EXIT_PROGRESS,
-  seamAssistDurationMs: SEAM_ASSIST_DURATION_MS,
+  frameScrollWrites: 0,
 };
