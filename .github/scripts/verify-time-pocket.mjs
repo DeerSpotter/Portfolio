@@ -13,6 +13,9 @@ for (const required of [
   'COAST_RATE_FAR = 12',
   'COAST_RATE_NEAR = 4.5',
   'TIME_FIELD_RADIUS = 0.085',
+  'let hasFlightInput = false',
+  'hasFlightInput = true',
+  'const canCoast = hasFlightInput',
   "mode = canCoast ? 'time-pocket' : 'flight'",
   'coastCarry += rate * dt',
   'syntheticScrollUntil = performance.now() + 90',
@@ -71,6 +74,7 @@ for (const required of [
 }
 
 console.log('[portfolio-time-pocket] PASS');
+console.log('[portfolio-time-pocket] entry=user-flight-then-idle');
 console.log('[portfolio-time-pocket] idle=cinematic-time-dilation-pass');
 console.log('[portfolio-time-pocket] coast=12px/s-far->4.5px/s-near');
 console.log('[portfolio-time-pocket] focus=latched-no-waypoint-01-reset');
