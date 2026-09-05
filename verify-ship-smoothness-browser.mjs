@@ -14,9 +14,11 @@ for (const required of [
   'const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);',
   'const BANK_DEADBAND = 0.035;',
   'const BANK_CENTER_EPSILON = 0.025;',
+  'const REDUCED_MOTION_BANK_SCALE = 0.62;',
+  'turnSignal * 2.55 * coastCalm * bankMotionScale',
   'requestedBankSide !== activeBankSide',
   'bankTargetRoll = 0;',
-  "motionContract: 'known-good-flight-centered-bank-v1'",
+  "motionContract: 'known-good-flight-centered-bank-v2'",
 ]) {
   if (!source.includes(required)) throw new Error(`Centered-bank contract missing: ${required}`);
 }
@@ -27,20 +29,22 @@ for (const forbidden of [
   'TANGENT_SAMPLE_WINDOW',
   'tangentBefore',
   'tangentAfter',
+  'turnSignal * 2.55 - filteredVelocity * 0.26',
   "motionContract: 'route-locked-attitude-smoothed-v1'",
   "motionContract: 'known-good-speed-spatial-tangent-v1'",
 ]) {
-  if (source.includes(forbidden)) throw new Error(`Out-of-scope ship smoothing returned: ${forbidden}`);
+  if (source.includes(forbidden)) throw new Error(`Out-of-scope ship steering returned: ${forbidden}`);
 }
 
-async function exercise(viewport, label) {
+async function exercise(viewport, label, reducedMotion = false) {
   const page = await browser.newPage({ viewport });
+  if (reducedMotion) await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioShipDebug?.ready, null, { timeout: 15000 });
   await page.waitForTimeout(250);
 
   const initialContract = await page.evaluate(() => window.__portfolioShipDebug?.motionContract);
-  if (initialContract !== 'known-good-flight-centered-bank-v1') {
+  if (initialContract !== 'known-good-flight-centered-bank-v2') {
     throw new Error(`${label}: wrong ship motion contract: ${initialContract}`);
   }
 
@@ -59,8 +63,10 @@ async function exercise(viewport, label) {
           roll: ship.ship.roll,
           activeSide: ship.bank.activeSide,
           requestedSide: ship.bank.requestedSide,
+          turnSignal: ship.bank.turnSignal,
           targetRoll: ship.bank.targetRoll,
           appliedTargetRoll: ship.bank.appliedTargetRoll,
+          reducedMotionScale: ship.bank.reducedMotionScale,
         });
       }
     }
@@ -73,9 +79,14 @@ async function exercise(viewport, label) {
     throw new Error(`${label}: normal flight progress was slowed or collapsed: delta=${progressTravel}`);
   }
 
+  if (reducedMotion && !samples.some(sample => Math.abs(sample.reducedMotionScale - 0.62) < 0.001)) {
+    throw new Error(`${label}: reduced-motion bank should remain active at reduced amplitude.`);
+  }
+
   const positivePeak = Math.max(...samples.map(sample => sample.roll));
   const negativePeak = Math.min(...samples.map(sample => sample.roll));
-  if (positivePeak < 0.06 || negativePeak > -0.06) {
+  const minimumPeak = reducedMotion ? 0.035 : 0.06;
+  if (positivePeak < minimumPeak || negativePeak > -minimumPeak) {
     throw new Error(`${label}: route did not demonstrate both bank directions: positive=${positivePeak}, negative=${negativePeak}`);
   }
 
@@ -90,6 +101,12 @@ async function exercise(viewport, label) {
     const current = samples[index];
     maxRollStep = Math.max(maxRollStep, Math.abs(current.roll - previous.roll));
     sinceLastActiveChangeMinAbsRoll = Math.min(sinceLastActiveChangeMinAbsRoll, Math.abs(current.roll));
+
+    if (Math.abs(current.targetRoll) > 0.04 && Math.abs(current.turnSignal) > 0.001) {
+      if (Math.sign(current.targetRoll) !== Math.sign(current.turnSignal)) {
+        throw new Error(`${label}: bank direction is not following signed route curvature: ${JSON.stringify(current)}`);
+      }
+    }
 
     if (current.requestedSide && current.activeSide && current.requestedSide !== current.activeSide) {
       centerGateFrames += 1;
@@ -121,9 +138,10 @@ async function exercise(viewport, label) {
 
 try {
   await exercise({ width: 1440, height: 900 }, 'desktop');
-  await exercise({ width: 414, height: 896 }, 'mobile');
+  await exercise({ width: 414, height: 896 }, 'mobile-reduced-motion', true);
   console.log('[portfolio-ship-bank] PASS');
   console.log('[portfolio-ship-bank] sequence=bank-right-center-bank-left-center');
+  console.log('[portfolio-ship-bank] input=signed-route-curvature-only');
   console.log('[portfolio-ship-bank] scope=roll-only-known-good-flight-preserved');
 } finally {
   await browser.close();
