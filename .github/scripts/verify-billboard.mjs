@@ -17,8 +17,13 @@ for (const state of ['distant', 'approaching', 'arming', 'active', 'passing']) {
 }
 
 for (const behavior of [
-  "contract: 'approaching-skewed-interactive-billboard-v2'",
+  "contract: 'approaching-skewed-interactive-billboard-v3'",
   "import './time-pocket-flight.js'",
+  'INTERACTION_HOLD_MS = 1800',
+  'INTERACTION_FIELD_THRESHOLD = 0.72',
+  'captureInteractionHold',
+  'interactionHoldUntil',
+  "billboard.dataset.interactionHold = hold.held ? 'true' : 'false'",
   'rotateY(var(--billboard-yaw))',
   'skewY(var(--billboard-skew))',
   "data-billboard-state='arming'",
@@ -41,9 +46,13 @@ if (!js.includes("state === 'arming' || state === 'active'")) {
 if (!js.includes('window.__portfolioTimePocketDebug?.lockedStop')) {
   throw new Error('Billboard must follow the shared latched time-pocket stop.');
 }
+if (!js.includes("pocket?.mode === 'time-pocket'")) {
+  throw new Error('Interaction hold must only engage during the cinematic slow pass.');
+}
 
 console.log('[portfolio-billboard] PASS');
 console.log('[portfolio-billboard] path=distant->approaching->arming->active->passing');
 console.log('[portfolio-billboard] perspective=flight-direction-skew');
 console.log('[portfolio-billboard] interaction=near-range-plus-slow-pass');
+console.log('[portfolio-billboard] hold=1800ms-camera-relative-click-window');
 console.log('[portfolio-billboard] focus=shared-latched-stop');
