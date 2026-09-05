@@ -10,7 +10,8 @@ page.on('console', message => {
   if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);
 });
 
-await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+try {
+await page.goto(url, { waitUntil: 'load', timeout: 30000 });
 await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready === true, null, { timeout: 15000 });
 await page.waitForFunction(() => window.__portfolioShipDebug?.ready === true, null, { timeout: 15000 });
 
@@ -69,7 +70,7 @@ const automation = await page.evaluate(() => ({
 if (!(automation.canvas.progress > 0.28 && automation.canvas.progress < 0.40)) {
   throw new Error(`Canvas flight did not advance to Automation region: progress=${automation.canvas.progress}`);
 }
-if (automation.canvas.trailMode !== 'orbit' || automation.canvas.activeStop !== 'Automation') {
+if (automation.canvas.trailMode !== 'orbit' || automation.canvas.activeStop !== 'Vault automation') {
   throw new Error(`Trail did not settle into Automation orbit: mode=${automation.canvas.trailMode}, stop=${automation.canvas.activeStop}`);
 }
 if (Math.abs(automation.ship.progress - automation.canvas.progress) > 0.01) {
@@ -115,9 +116,76 @@ if (!(afterReverse.loopCycle <= beforeReverse.loopCycle - 1)) {
   throw new Error(`Reverse loop did not recycle: ${beforeReverse.loopCycle} -> ${afterReverse.loopCycle}`);
 }
 
+// The hiring content must be usable through real navigation, not just rendered
+// as text above the canvas. Preserve the existing motion assertions above.
+const expectedStops = ['Start here', 'Engineering', 'Vault automation', 'ContextPort', 'ipaSim', 'Clarity'];
+for (let index = 0; index < expectedStops.length; index++) {
+  await page.locator(`[data-stop="${index}"]`).click();
+  await page.waitForFunction(title => window.__portfolioCanvasDebug?.activeStop === title, expectedStops[index]);
+  const current = await page.locator(`[data-stop="${index}"]`).getAttribute('aria-current');
+  if (current !== 'step') throw new Error(`Waypoint ${index + 1} navigation is not synchronized with the flight.`);
+  await page.locator('#detailAction').click();
+  if (!await page.locator('#hiringBrief').evaluate(dialog => dialog.open)) throw new Error('The case-study action did not open the hiring brief.');
+  const section = await page.locator('#detailAction').getAttribute('data-open-brief');
+  if (!await page.locator(`[id="${section}"]`).evaluate(element => document.activeElement === element)) {
+    throw new Error(`The hiring brief did not focus its requested section: ${section}`);
+  }
+  await page.keyboard.press('Escape');
+  if (!await page.locator('#detailAction').evaluate(element => document.activeElement === element)) throw new Error('Closing the hiring brief lost keyboard focus.');
+}
+
+// Reading a long brief at a flight boundary must never recycle the background.
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.waitForTimeout(700);
+const readingStart = await page.evaluate(() => ({ y: scrollY, cycle: window.__portfolioCanvasDebug.loopCycle }));
+await page.locator('.chapter [data-open-brief="deepgram"]').click();
+await page.locator('#hiringBrief').hover();
+await page.mouse.wheel(0, -1000);
+await page.waitForTimeout(250);
+const readingEnd = await page.evaluate(() => ({ y: scrollY, cycle: window.__portfolioCanvasDebug.loopCycle }));
+if (readingStart.y !== readingEnd.y || readingStart.cycle !== readingEnd.cycle) throw new Error('Reading the brief changed the flight position.');
+await page.locator('.close-button').click();
+
+// Text and all six controls must remain reachable on narrow and short screens.
+for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }, { width: 844, height: 390 }]) {
+  console.log(`[portfolio-hiring] Checking viewport ${viewport.width}x${viewport.height}`);
+  await page.setViewportSize(viewport);
+  const layout = await page.evaluate(() => {
+    const card = document.querySelector('.detail').getBoundingClientRect();
+    const footer = document.querySelector('.hud-bottom').getBoundingClientRect();
+    return { cardBottom: card.bottom, navigationTop: footer.top };
+  });
+  if (layout.cardBottom > layout.navigationTop + 1) {
+    throw new Error(`Content overlaps navigation at ${viewport.width}x${viewport.height}: card bottom=${layout.cardBottom}, navigation top=${layout.navigationTop}`);
+  }
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+  if (overflow) throw new Error(`Horizontal overflow at ${viewport.width}x${viewport.height}.`);
+  await page.locator('[data-stop="3"]').click();
+  await page.waitForFunction(() => window.__portfolioCanvasDebug?.activeStop === 'ContextPort');
+  await page.locator('#detailAction').click();
+  if (await page.locator('#hiringBrief').evaluate(dialog => dialog.scrollWidth > dialog.clientWidth + 1)) {
+    throw new Error(`Hiring brief overflows horizontally at ${viewport.width}x${viewport.height}.`);
+  }
+  await page.locator('.close-button').click();
+}
+
+// Keep enlarged text and the directly shareable Deepgram entry usable.
+await page.setViewportSize({ width: 720, height: 450 });
+await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+await page.locator('.identity [data-open-brief]').click();
+if (await page.locator('#hiringBrief').evaluate(dialog => dialog.scrollWidth > dialog.clientWidth + 1)) throw new Error('Hiring brief overflows at 200% text size.');
+await page.locator('.close-button').click();
+await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+const deepgramUrl = new URL(url);
+deepgramUrl.searchParams.set('brief', 'deepgram');
+await page.goto(deepgramUrl.href, { waitUntil: 'load' });
+await page.waitForFunction(() => document.getElementById('hiringBrief')?.open && document.activeElement?.id === 'deepgram');
+await page.keyboard.press('Escape');
+
 if (browserErrors.length) throw new Error(`Browser diagnostics:\n${browserErrors.join('\n')}`);
 
 console.log('[portfolio-canvas] PASS');
+console.log('[portfolio-hiring] PASS: six waypoint actions, case-study focus, Escape/close, reading isolation, responsive layouts, enlarged text, Deepgram direct link');
 console.log(`[portfolio-canvas] background=${initial.canvas.engine}`);
 console.log(`[portfolio-canvas] ship=${initial.ship.model}`);
 console.log(`[portfolio-canvas] flight=${initial.ship.flightContract}`);
@@ -131,4 +199,9 @@ console.log(`[portfolio-canvas] cameraDisplacement=${cameraMoved.toFixed(2)}`);
 console.log(`[portfolio-canvas] forwardLoop=${beforeLoop.loopCycle}->${afterLoop.loopCycle}`);
 console.log(`[portfolio-canvas] reverseLoop=${beforeReverse.loopCycle}->${afterReverse.loopCycle}`);
 
-await browser.close();
+} catch (error) {
+  if (browserErrors.length) console.error(`[portfolio-browser] ${browserErrors.join('\n')}`);
+  throw error;
+} finally {
+  await browser.close();
+}

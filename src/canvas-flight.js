@@ -1,12 +1,11 @@
+import { waypoints as stops } from './portfolio-content.js';
+import { showWaypoint } from './portfolio-ui.js';
+
 const canvas = document.getElementById('world');
 const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
 
-const chapterEl = document.getElementById('chapterName');
-const detailTitleEl = document.getElementById('detailTitle');
-const detailBodyEl = document.getElementById('detailBody');
 const velocityEl = document.getElementById('velocity');
 const loopEl = document.getElementById('cycle');
-const hintEl = document.getElementById('hint');
 
 const TAU = Math.PI * 2;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -29,15 +28,6 @@ const COLORS = {
   plum: '#694f66',
   gold: '#a9792f',
 };
-
-const stops = [
-  { at: 0.04, title: 'Departure', body: 'A guided flight through engineering, automation, AI systems, runtime work, and simulation.', color: COLORS.fox, side: -0.20, lift: -0.02 },
-  { at: 0.18, title: 'Engineering Foundations', body: 'Mechanical design, NX, Teamcenter, PLM problem solving, and years of real engineering constraints.', color: COLORS.olive, side: 0.66, lift: -0.16 },
-  { at: 0.34, title: 'Automation', body: 'Tools that reduce repetitive engineering work, expose failures clearly, and make difficult workflows simpler.', color: COLORS.blue, side: -0.68, lift: 0.10 },
-  { at: 0.51, title: 'AI Systems', body: 'Context portability, agent workflows, human approval boundaries, and AI-assisted engineering with verification.', color: COLORS.plum, side: 0.62, lift: -0.05 },
-  { at: 0.69, title: 'Runtime Engineering', body: 'Compatibility layers, ARM64 execution, generated adapters, filesystem boundaries, and fail-closed diagnostics.', color: COLORS.rust, side: -0.62, lift: 0.14 },
-  { at: 0.85, title: 'Mission Systems', body: 'Simulation, operational visualization, source-grounded capability modeling, and complex systems made explorable.', color: COLORS.gold, side: 0.68, lift: 0.05 },
-];
 
 const planets = [
   { at: 0.10, r: 62, side: 0.72, lift: -0.18, c1: '#d99554', c2: '#8e5c31', ring: true, tilt: -0.30 },
@@ -121,7 +111,6 @@ function updateTargetFromScroll() {
   const { local } = scrollMetrics();
   targetTravel = loopCycle + local;
   if (Math.abs(scrollY - lastScrollY) > 2) lastMotionTime = performance.now();
-  if (Math.abs(scrollY - lastScrollY) > 12) hintEl.style.opacity = '0.36';
   lastScrollY = scrollY;
 }
 
@@ -539,9 +528,7 @@ function updatePanel(progress) {
     const d = Math.abs(wrapSigned(stop.at - progress));
     return !best || d < best.d ? { stop, d } : best;
   }, null).stop;
-  chapterEl.textContent = current.title;
-  detailTitleEl.textContent = current.title;
-  detailBodyEl.textContent = current.body;
+  showWaypoint(current);
 }
 
 function animate(now) {

@@ -2,8 +2,7 @@ name: Baseline Browser Proof
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,81 +10,36 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: portfolio-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   browser-proof:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Check out exact revision
         uses: actions/checkout@v4
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Install browser test dependency
-        run: |
-          npm init -y
-          npm install --no-save playwright@1.55.0
-          npx playwright install --with-deps chromium
-
-      - name: Start static site
-        run: |
-          python3 -m http.server 8231 > /tmp/portfolio-http.log 2>&1 &
-          echo $! > /tmp/portfolio-http.pid
-          sleep 2
-
-      - name: Run baseline browser proof and capture diagnostic
-        id: browser_test
-        shell: bash
-        run: |
-          set +e
-          node verify-canvas.mjs > baseline-diagnostic.txt 2>&1
-          status=$?
-          set -e
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          cat baseline-diagnostic.txt
-          exit 0
-
-      - name: Publish or update PR diagnostic
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          TEST_STATUS: ${{ steps.browser_test.outputs.status }}
-        with:
-          script: |
-            const fs = require('fs');
-            const marker = '<!-- portfolio-baseline-ci -->';
-            const status = process.env.TEST_STATUS || 'unknown';
-            let diagnostic = 'Diagnostic file was not produced.';
-            if (fs.existsSync('baseline-diagnostic.txt')) {
-              diagnostic = fs.readFileSync('baseline-diagnostic.txt', 'utf8').trim();
-            }
-            if (diagnostic.length > 12000) diagnostic = diagnostic.slice(-12000);
-
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const outcome = status === '0' ? 'PASS' : 'FAIL';
-            const body = `${marker}\n## Portfolio baseline browser proof: ${outcome}\n\nCommit: \`${context.sha}\`\n\n\`\`\`text\n${diagnostic}\n\`\`\``;
-            const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
-            const existing = comments.data.find(comment => comment.body && comment.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
-
-      - name: Fail normally after diagnostic is published
+      - name: Capture setup, syntax, packaging and browser diagnostics
+        run: node .github/scripts/run-checks.mjs
+      - name: Publish or update the single PR diagnostic
         if: always()
-        shell: bash
         env:
-          TEST_STATUS: ${{ steps.browser_test.outputs.status }}
-        run: |
-          if [ "${TEST_STATUS:-1}" != "0" ]; then
-            echo "Baseline browser proof failed."
-            cat baseline-diagnostic.txt || true
-            exit "${TEST_STATUS:-1}"
-          fi
-          echo "Baseline browser proof passed."
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/report-ci.mjs
+      - name: Preserve complete diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-diagnostics
+          path: .ci-results/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Fail normally after diagnostic publication
+        if: always()
+        run: node .github/scripts/enforce-result.mjs

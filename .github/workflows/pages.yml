@@ -2,14 +2,15 @@ name: Deploy Portfolio to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: pages
@@ -22,44 +23,39 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Check out site
         uses: actions/checkout@v4
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Install browser test dependency
-        run: |
-          npm init -y
-          npm install --no-save playwright@1.55.0
-          npx playwright install --with-deps chromium
-
-      - name: Start static site
-        run: |
-          python3 -m http.server 8231 > /tmp/portfolio-http.log 2>&1 &
-          echo $! > /tmp/portfolio-http.pid
-          sleep 2
-
-      - name: Verify production baseline before deploy
-        shell: bash
-        run: |
-          set -o pipefail
-          node verify-canvas.mjs 2>&1 | tee baseline-diagnostic.txt
-
+      - name: Capture setup, syntax, packaging and browser diagnostics
+        run: node .github/scripts/run-checks.mjs
+      - name: Publish or update the single PR diagnostic
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/report-ci.mjs
+      - name: Preserve complete diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-diagnostics
+          path: .ci-results/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Fail normally after diagnostic publication
+        if: always()
+        run: node .github/scripts/enforce-result.mjs
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
-
-      - name: Upload static site
+      - name: Upload public site package
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
-
+          path: _site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

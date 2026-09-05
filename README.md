@@ -24,6 +24,25 @@ native browser scroll
 
 This is the baseline for future work. New visual and portfolio features should build on this hybrid architecture rather than restoring the old fully 3D environment unless there is a specific reason to do so.
 
+## Hiring narrative
+
+The portfolio presents Maxim's engineering judgment and AI-assisted development through specific project decisions. Its six stops cover the hiring case, mechanical design and Teamcenter experience, Vault workflow automation, ContextPort, ipaSim, and the presentation of complex information.
+
+- `index.html` contains the semantic page shell and complete hiring brief.
+- `src/portfolio.css` owns the parchment, ink, and orange HTML presentation and responsive reading layouts.
+- `src/portfolio-content.js` owns the six concise waypoint stories, with the baseline positions and colors preserved.
+- `src/portfolio-ui.js` connects waypoint navigation to native document scroll, updates the current story only when it changes, and manages the native hiring-brief dialog.
+
+The brief explains the problem, design decision, and evidence for each project. ContextPort and ipaSim link to public source and a merged implementation. Vault work is explicitly described as a private project. ipaSim is credited as an active fork extending Jan Joneš's original research; a storage milestone is not presented as completed iOS compatibility. Career statements describe Maxim's experience, without invented impact metrics or customer adoption claims.
+
+The tailored Deepgram section maps that work to the Staff Developer Experience Engineer role. It describes proposed contributions and links to the employer's posting. The rest of the portfolio is written for engineering, developer-tooling, and AI product teams generally. A direct entry to the tailored brief is available at:
+
+```text
+https://deerspotter.github.io/Portfolio/?brief=deepgram
+```
+
+The brief uses native dialog keyboard behavior, returns focus to its opener, and preserves the flight position while reading. All content and navigation remain available on narrow screens; short viewports scroll their content instead of discarding it. The existing procedural ship is still the documented baseline model. No new stubs, placeholder projects, or monkey patches are introduced.
+
 ## Flight behavior
 
 The ship preserves the movement language from the original live-3D prototype:
@@ -74,7 +93,7 @@ http://localhost:8231
 
 The site is designed to run as a static GitHub Pages project site with no backend or database.
 
-The deployment workflow publishes the repository root from `main` using GitHub Pages Actions. After a successful deployment the expected project URL is:
+The deployment workflow publishes a validated `_site/` package containing only `index.html` and `src/` from `main` using GitHub Pages Actions. Test dependencies, diagnostics, and repository maintenance files are outside that public package. After a successful deployment the expected project URL is:
 
 ```text
 https://deerspotter.github.io/Portfolio/
@@ -98,3 +117,9 @@ The browser proof protects the baseline contracts:
 - canvas and ship progress remain synchronized
 - waypoint trail curl still works
 - forward and reverse seamless looping still work
+
+The same proof also exercises all six waypoint actions, hiring-brief section focus, closing and Escape, focus restoration, independent reading scroll, narrow and short layouts, enlarged text, and the direct Deepgram link. CI serves the public package under `/Portfolio/`, matching GitHub Pages.
+
+Both workflows run `.github/scripts/run-checks.mjs`, which captures the real output of JavaScript syntax checks, npm setup, browser installation, static packaging, and the existing browser proof. The first failed stage stops further validation. `.github/scripts/report-ci.mjs` updates the single `portfolio-baseline-ci` PR comment and writes the job summary; complete output is retained in the `portfolio-diagnostics` artifact. Only then does `.github/scripts/enforce-result.mjs` fail the job normally. GitHub Pages runs use the associated PR conversation when available.
+
+The repository is public. The runner script can also be invoked on a Linux machine with Node, npm, Python, and permission to install Chromium dependencies; the final gate can run there too. PR publication requires GitHub's event environment and a token with issue-comment permission. Fork PR tokens may lack that permission: publication errors remain explicit, and the diagnostic summary and artifact are still retained. CI does not auto-merge or repeatedly poll other workflow runs.
