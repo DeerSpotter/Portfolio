@@ -171,9 +171,6 @@ async function exercise(viewport, label, reducedMotion = false) {
     for (let frame = 0; frame < 30; frame++) await new Promise(requestAnimationFrame);
     const cycleBefore = window.__portfolioCanvasDebug.loopCycle;
 
-    // Move forward through the exact area visible in the supplied recording.
-    // The closed route's tangent reverses just before the wrap; the rendered
-    // ship must remain in a stable chase-camera corridor while that happens.
     for (let frame = 0; frame < 120; frame++) {
       const t = frame / 119;
       scrollTo(0, max * (0.80 + 0.20 * t));
@@ -223,18 +220,14 @@ async function exercise(viewport, label, reducedMotion = false) {
     && sample.neutralizing
     && sample.neutralZone
   );
-  if (!preLevel) {
-    throw new Error(`${label}: ship did not begin leveling before the 06 -> 01 loopCycle wrap.`);
-  }
+  if (!preLevel) throw new Error(`${label}: ship did not begin leveling before the 06 -> 01 loopCycle wrap.`);
 
   const cameraLockedBeforeWrap = approachFrames.find(sample =>
     sample.loopCycle === seam.cycleBefore
     && sample.progress >= 0.91
     && sample.cameraSeamBlend >= 0.98
   );
-  if (!cameraLockedBeforeWrap) {
-    throw new Error(`${label}: chase camera did not attach to rendered ship before route-tangent reversal.`);
-  }
+  if (!cameraLockedBeforeWrap) throw new Error(`${label}: chase camera did not attach to rendered ship before route-tangent reversal.`);
 
   const preWrapSettled = [...approachFrames].reverse().find(sample =>
     sample.loopCycle === seam.cycleBefore
@@ -247,9 +240,7 @@ async function exercise(viewport, label, reducedMotion = false) {
 
   const seamFrames = seam.result.filter(sample => sample.phase === 'seam');
   const neutralFrames = seam.result.filter(sample => sample.neutralizing);
-  if (neutralFrames.length < 2) {
-    throw new Error(`${label}: bank-neutral reloop state was not exercised.`);
-  }
+  if (neutralFrames.length < 2) throw new Error(`${label}: bank-neutral reloop state was not exercised.`);
   for (const sample of neutralFrames) {
     if (Math.abs(sample.appliedTargetRoll) > 0.000001 || sample.activeSide !== 0) {
       throw new Error(`${label}: reloop commanded a side bank instead of level: ${JSON.stringify(sample)}`);
@@ -260,29 +251,18 @@ async function exercise(viewport, label, reducedMotion = false) {
   let maxSeamCameraBankOffset = 0;
   for (let index = 0; index < seamFrames.length; index++) {
     maxSeamCameraBankOffset = Math.max(maxSeamCameraBankOffset, Math.abs(seamFrames[index].cameraBankOffset));
-    if (index > 0) {
-      maxSeamRollStep = Math.max(maxSeamRollStep, Math.abs(seamFrames[index].roll - seamFrames[index - 1].roll));
-    }
+    if (index > 0) maxSeamRollStep = Math.max(maxSeamRollStep, Math.abs(seamFrames[index].roll - seamFrames[index - 1].roll));
   }
-  if (maxSeamRollStep > 0.14) {
-    throw new Error(`${label}: reloop still jolts roll: max seam roll step=${maxSeamRollStep}`);
-  }
-  if (maxSeamCameraBankOffset > 0.08) {
-    throw new Error(`${label}: chase-camera bank offset still kicks sideways through reloop: max offset=${maxSeamCameraBankOffset}`);
-  }
+  if (maxSeamRollStep > 0.14) throw new Error(`${label}: reloop still jolts roll: max seam roll step=${maxSeamRollStep}`);
+  if (maxSeamCameraBankOffset > 0.08) throw new Error(`${label}: chase-camera bank offset still kicks sideways through reloop: max offset=${maxSeamCameraBankOffset}`);
 
-  // This is the regression that corresponds to the supplied video. While the
-  // camera seam blend is effectively locked, the visible ship may not launch
-  // across the viewport or collapse toward the camera and then recover.
   const visualSeamFrames = seam.result.filter(sample =>
     sample.cameraSeamBlend >= 0.95
     && Number.isFinite(sample.screenX)
     && Number.isFinite(sample.screenY)
     && Number.isFinite(sample.cameraDistanceToShip)
   );
-  if (visualSeamFrames.length < 12) {
-    throw new Error(`${label}: insufficient screen-space seam samples: ${visualSeamFrames.length}`);
-  }
+  if (visualSeamFrames.length < 12) throw new Error(`${label}: insufficient screen-space seam samples: ${visualSeamFrames.length}`);
 
   let minScreenX = Infinity;
   let maxScreenX = -Infinity;
@@ -297,33 +277,21 @@ async function exercise(viewport, label, reducedMotion = false) {
     maxCenterDeviation = Math.max(maxCenterDeviation, Math.abs(current.screenX - viewport.width / 2));
     minCameraDistance = Math.min(minCameraDistance, current.cameraDistanceToShip);
     maxCameraDistance = Math.max(maxCameraDistance, current.cameraDistanceToShip);
-    if (index > 0) {
-      maxScreenStep = Math.max(maxScreenStep, Math.abs(current.screenX - visualSeamFrames[index - 1].screenX));
-    }
+    if (index > 0) maxScreenStep = Math.max(maxScreenStep, Math.abs(current.screenX - visualSeamFrames[index - 1].screenX));
   }
 
   const screenRange = maxScreenX - minScreenX;
   if (screenRange > viewport.width * 0.20) {
     throw new Error(`${label}: ship still shoots sideways through 06 -> 01 seam: x range=${screenRange}px (${minScreenX}->${maxScreenX}).`);
   }
-  if (maxScreenStep > viewport.width * 0.08) {
-    throw new Error(`${label}: ship still has a one-frame lateral seam jump: max x step=${maxScreenStep}px.`);
-  }
-  if (maxCenterDeviation > viewport.width * 0.24) {
-    throw new Error(`${label}: ship leaves the chase-camera center corridor at seam: max deviation=${maxCenterDeviation}px.`);
-  }
+  if (maxScreenStep > viewport.width * 0.08) throw new Error(`${label}: ship still has a one-frame lateral seam jump: max x step=${maxScreenStep}px.`);
+  if (maxCenterDeviation > viewport.width * 0.24) throw new Error(`${label}: ship leaves the chase-camera center corridor at seam: max deviation=${maxCenterDeviation}px.`);
   if (minCameraDistance <= 0 || maxCameraDistance / minCameraDistance > 1.75) {
     throw new Error(`${label}: ship still surges toward/away from camera at seam: distance=${minCameraDistance}->${maxCameraDistance}.`);
   }
 
-  const seamSigns = new Set(
-    neutralFrames
-      .filter(sample => Math.abs(sample.roll) > 0.02)
-      .map(sample => Math.sign(sample.roll)),
-  );
-  if (seamSigns.size > 1) {
-    throw new Error(`${label}: reloop rolls right and left while it should only return to center.`);
-  }
+  const seamSigns = new Set(neutralFrames.filter(sample => Math.abs(sample.roll) > 0.02).map(sample => Math.sign(sample.roll)));
+  if (seamSigns.size > 1) throw new Error(`${label}: reloop rolls right and left while it should only return to center.`);
 
   const release = seam.result.find(sample => !sample.neutralizing && sample.phase === 'release');
   if (!release) throw new Error(`${label}: bank never released after clearing the reloop seam.`);
