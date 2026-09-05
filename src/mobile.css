@@ -11,7 +11,7 @@
     perspective: 900px;
   }
 
-  .hud-top { gap: 5px; }
+  .hud-top { grid-row: 1; gap: 5px; }
   .identity { max-width: 72vw; min-width: 0; }
   .identity .eyebrow { margin-bottom: 2px; font-size: .46rem; line-height: 1.25; letter-spacing: .07em; }
   h1 { font-size: 1.15rem; line-height: 1; letter-spacing: -.025em; }
@@ -65,6 +65,7 @@
   .detail .waypoint-status { margin-top: 4px; font-size: .43rem; line-height: 1.25; }
 
   .hud-bottom {
+    grid-row: 3;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(70px, 23vw);
     align-items: end;
@@ -198,6 +199,7 @@
 @media (prefers-reduced-motion: reduce) and (max-width: 700px),
        (prefers-reduced-motion: reduce) and (max-width: 900px) and (max-height: 600px) {
   .detail {
+    grid-row: 2;
     position: relative;
     left: auto;
     top: auto;
