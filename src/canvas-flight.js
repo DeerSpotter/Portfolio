@@ -183,6 +183,11 @@ addEventListener('wheel', event => {
     recycleScroll(direction);
   }
 }, { passive: false });
+addEventListener('portfolio-flight-loop-intent', event => {
+  const direction = Math.sign(Number(event.detail?.direction));
+  if (!direction) return;
+  recycleScroll(direction);
+});
 addEventListener('resize', resize, { passive: true });
 addEventListener('visibilitychange', () => {
   if (!document.hidden) lastTime = performance.now();
@@ -993,6 +998,7 @@ function animate(now) {
     ribbon: RIBBON_CONTRACT,
     ribbonStrands: 3,
     wakeMaxRadius: WAKE_MAX_RADIUS,
+    inputLoop: 'wheel-plus-semantic-touch-intent-v2',
   };
 
   requestAnimationFrame(animate);

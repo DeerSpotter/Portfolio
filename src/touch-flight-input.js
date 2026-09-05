@@ -1,9 +1,10 @@
-// Touch devices do not emit the wheel-edge gesture used by the desktop flight
-// loop. Translate only a completed touch gesture at a document boundary into
-// that existing input path so canvas-flight remains the single owner of loop
-// state, travel continuity, and telemetry.
+// Touch devices do not emit the wheel-edge gesture used by desktop flight.
+// Keep touch interpretation separate from loop state: this adapter reports a
+// semantic flight-loop intent, while canvas-flight remains the single owner of
+// loopCycle, scroll recycling, travel continuity, and telemetry.
 const EDGE_PX = 3;
 const MIN_GESTURE_PX = 18;
+const LOOP_INTENT_EVENT = 'portfolio-flight-loop-intent';
 
 let startY = null;
 let lastY = null;
@@ -22,6 +23,26 @@ function documentEdge(direction) {
   if (direction > 0) return scrollY >= maxScroll - EDGE_PX;
   if (direction < 0) return scrollY <= EDGE_PX;
   return false;
+}
+
+function sendLoopIntent(direction) {
+  dispatchEvent(new CustomEvent(LOOP_INTENT_EVENT, {
+    detail: { direction },
+  }));
+}
+
+function deliverCompletedGesture(direction) {
+  if (documentEdge(direction)) {
+    sendLoopIntent(direction);
+    return;
+  }
+
+  // Mobile Safari can finish updating scrollY after touchend has fired. Check
+  // again on the next animation frame so the same completed swipe can cross the
+  // boundary instead of requiring a second gesture against the rubber-band.
+  requestAnimationFrame(() => {
+    if (documentEdge(direction)) sendLoopIntent(direction);
+  });
 }
 
 addEventListener('touchstart', event => {
@@ -48,20 +69,15 @@ addEventListener('touchend', () => {
   }
 
   const direction = Math.sign(travelY);
-  if (documentEdge(direction)) {
-    dispatchEvent(new WheelEvent('wheel', {
-      deltaY: direction * 100,
-      bubbles: false,
-      cancelable: true,
-    }));
-  }
   resetGesture();
+  deliverCompletedGesture(direction);
 }, { passive: true });
 
 addEventListener('touchcancel', resetGesture, { passive: true });
 
 window.__portfolioTouchFlightDebug = {
-  contract: 'touch-edge-to-flight-loop-v1',
+  contract: 'touch-edge-to-flight-loop-v2',
   edgePx: EDGE_PX,
   minimumGesturePx: MIN_GESTURE_PX,
+  delivery: 'semantic-intent-after-scroll-settle',
 };
