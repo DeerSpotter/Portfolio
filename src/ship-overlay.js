@@ -52,6 +52,7 @@ const route = new THREE.CatmullRomCurve3([
 const worldUp = new THREE.Vector3(0, 1, 0);
 const routePos = new THREE.Vector3();
 const tangent = new THREE.Vector3();
+const smoothTangent = new THREE.Vector3(0, 0, -1);
 const curvatureProbe = new THREE.Vector3();
 const right = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
@@ -116,11 +117,17 @@ function animate(now) {
   route.getTangentAt(progress, tangent).normalize();
   ship.position.copy(routePos);
 
-  right.crossVectors(tangent, worldUp).normalize();
+  // Preserve the time-pocket's smoothed directional basis, but apply it only
+  // to presentation. Position remains route-locked, so smoothing cannot slow
+  // the ship down or make it arrive after the world/waypoint state.
+  if (!poseInitialized) smoothTangent.copy(tangent);
+  else smoothTangent.lerp(tangent, 1 - Math.exp(-(reducedMotion ? 24 : 18) * dt)).normalize();
+
+  right.crossVectors(smoothTangent, worldUp).normalize();
   if (right.lengthSq() < 0.001) right.set(1, 0, 0);
 
-  const yaw = Math.atan2(-tangent.x, -tangent.z);
-  const pitch = Math.asin(THREE.MathUtils.clamp(tangent.y, -1, 1));
+  const yaw = Math.atan2(-smoothTangent.x, -smoothTangent.z);
+  const pitch = Math.asin(THREE.MathUtils.clamp(smoothTangent.y, -1, 1));
   route.getTangentAt(wrap01(progress + 0.008), curvatureProbe).normalize();
   const turnSignal = right.dot(curvatureProbe) * -1;
   const coastCalm = Math.max(0.18, 1 - coastAmount * 0.45 - timeFieldAmount * 0.36);
@@ -154,7 +161,7 @@ function animate(now) {
   camera.position.copy(desiredCamera);
 
   desiredLook.copy(routePos)
-    .addScaledVector(tangent, 13.5 + warpAmount * 12)
+    .addScaledVector(smoothTangent, 13.5 + warpAmount * 12)
     .addScaledVector(worldUp, 0.35);
   if (!poseInitialized) smoothLook.copy(desiredLook);
   else smoothLook.lerp(desiredLook, 1 - Math.exp(-(reducedMotion ? 24 : 18) * dt));
