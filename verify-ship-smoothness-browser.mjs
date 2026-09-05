@@ -266,6 +266,8 @@ async function exercise(viewport, label, reducedMotion = false) {
   if (screenRange > viewport.width * 0.20) {
     throw new Error(`${label}: ship still shoots sideways through 06 -> 01 seam: x range=${screenRange}px (${minScreenX}->${maxScreenX}).`);
   }
+  // Keep the original video-derived limit. This PR must reduce the motion, not
+  // make CI accept the 121px one-frame kick that exposed the remaining defect.
   if (maxScreenStep > viewport.width * 0.08) throw new Error(`${label}: ship still has a one-frame lateral seam jump: max x step=${maxScreenStep}px.`);
   if (maxCenterDeviation > viewport.width * 0.24) throw new Error(`${label}: ship leaves the chase-camera center corridor at seam: max deviation=${maxCenterDeviation}px.`);
   if (minCameraDistance <= 0 || maxCameraDistance / minCameraDistance > 1.75) {
