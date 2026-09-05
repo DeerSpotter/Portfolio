@@ -150,3 +150,17 @@
   #destination::backdrop, .destination-layout, .destination-scene { transition: none; }
   .destination-stage-panel { transform: none !important; filter: none !important; }
 }
+
+/* On phones the depth motion is part of navigation, not ambient decoration.
+   Keep the desktop approach/read/pass transform even when the OS asks the
+   surrounding scene to reduce motion. */
+@media (prefers-reduced-motion: reduce) and (max-width: 800px),
+       (prefers-reduced-motion: reduce) and (max-width: 900px) and (max-height: 600px) {
+  .destination-stage-panel {
+    transform:
+      translate3d(var(--destination-flight-x), var(--destination-flight-y), 0)
+      rotateY(var(--destination-flight-yaw))
+      scale(var(--destination-flight-scale)) !important;
+    filter: blur(var(--destination-flight-blur)) !important;
+  }
+}
