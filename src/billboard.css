@@ -13,6 +13,7 @@
     --billboard-skew: 0deg;
     --billboard-glow: 0;
     --billboard-color: var(--rust);
+    --coast-strength: 0;
 
     position: absolute;
     left: 0;
@@ -40,9 +41,9 @@
       0 20px 46px rgba(77, 53, 24, .10),
       0 0 calc(34px * var(--billboard-glow)) color-mix(in srgb, var(--billboard-color) 42%, transparent);
     transition:
-      border-color 130ms linear,
-      box-shadow 130ms linear,
-      filter 130ms linear;
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      filter 180ms ease;
     overflow: hidden;
   }
 
@@ -77,24 +78,37 @@
 
   .detail[data-billboard-state='arming'] {
     pointer-events: auto;
-    filter: contrast(1.07) saturate(1.11) brightness(1.04);
-    animation: billboard-arm 720ms steps(2, end) infinite;
+    filter: contrast(1.06) saturate(1.10) brightness(1.035);
+    animation: billboard-arm 1.35s ease-in-out infinite;
   }
 
   .detail[data-billboard-state='arming']::after,
   .detail[data-billboard-state='active']::after {
-    opacity: .72;
-    animation: billboard-scan 980ms linear infinite;
+    opacity: .68;
+    animation: billboard-scan 1.65s linear infinite;
   }
 
   .detail[data-billboard-state='active'] {
     pointer-events: auto;
     border-color: color-mix(in srgb, var(--billboard-color) 72%, var(--ink));
-    filter: contrast(1.08) saturate(1.14) brightness(1.05);
+    filter: contrast(1.07) saturate(1.12) brightness(1.045);
     box-shadow:
       0 24px 56px rgba(77, 53, 24, .18),
       0 0 32px color-mix(in srgb, var(--billboard-color) 38%, transparent),
       0 0 78px color-mix(in srgb, var(--billboard-color) 18%, transparent);
+  }
+
+  .detail[data-time-pocket='true'][data-billboard-state='active'] {
+    animation: billboard-breathe 2.8s ease-in-out infinite;
+    box-shadow:
+      0 26px 62px rgba(77, 53, 24, .16),
+      0 0 calc(36px + 22px * var(--coast-strength)) color-mix(in srgb, var(--billboard-color) 34%, transparent),
+      0 0 calc(82px + 34px * var(--coast-strength)) color-mix(in srgb, var(--billboard-color) 16%, transparent);
+  }
+
+  .detail[data-time-pocket='true']::after {
+    animation-duration: 2.4s;
+    opacity: .52;
   }
 
   .detail[data-billboard-state='passing'] {
@@ -107,10 +121,13 @@
   }
 
   @keyframes billboard-arm {
-    0%, 100% { filter: contrast(1.05) saturate(1.08) brightness(1.01); }
-    42% { filter: contrast(1.10) saturate(1.18) brightness(1.08); }
-    46% { filter: contrast(1.02) saturate(1.04) brightness(.98); }
-    60% { filter: contrast(1.12) saturate(1.16) brightness(1.06); }
+    0%, 100% { filter: contrast(1.04) saturate(1.07) brightness(1.01); }
+    50% { filter: contrast(1.09) saturate(1.14) brightness(1.06); }
+  }
+
+  @keyframes billboard-breathe {
+    0%, 100% { filter: contrast(1.06) saturate(1.10) brightness(1.035); }
+    50% { filter: contrast(1.08) saturate(1.13) brightness(1.055); }
   }
 
   @keyframes billboard-scan {
