@@ -17,107 +17,6 @@
 .detail:focus-visible, .detail button:focus-visible { outline: 2px solid #efb874; outline-offset: 5px; border-radius: 16px; }
 .detail-rule { height: 8px; border-bottom: 1px solid #9ba58b; border-radius: 50%; background: transparent; }
 .detail .detail-proof { border-top: 0; }
-
-/* Internal arrival briefing. The billboard itself keeps the baseline pose and
-   flight behavior; only this reading surface changes as approach depth changes. */
-.arrival-panel-shell { position: relative; }
-.arrival-panel { position: relative; }
-.arrival-panel-ghost {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-.arrival-visual {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(238, 227, 206, .28);
-  font-family: var(--mono);
-}
-.arrival-visual:empty { margin-top: 0; padding-top: 0; border-top: 0; }
-.arrival-trace {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  list-style: none;
-  margin: 0;
-  padding: 14px 0 0;
-}
-.arrival-trace::before {
-  content: '';
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  top: 4px;
-  border-top: 1px solid rgba(245, 189, 128, .54);
-}
-.arrival-trace li {
-  position: relative;
-  min-width: 0;
-  padding-top: 7px;
-}
-.arrival-trace li::before {
-  content: '';
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  width: 7px;
-  height: 7px;
-  border: 1px solid #f5bd80;
-  border-radius: 50%;
-  background: #342b25;
-  transform: translateX(-50%);
-}
-.arrival-trace strong,
-.arrival-trace span,
-.arrival-readout strong,
-.arrival-readout span,
-.arrival-matrix strong,
-.arrival-matrix span { display: block; }
-.arrival-trace strong {
-  color: #fff0d4;
-  font-size: .68rem;
-  line-height: 1.25;
-  text-align: center;
-  letter-spacing: .025em;
-}
-.arrival-trace span {
-  margin-top: 4px;
-  color: #c6cdb7;
-  font-size: .61rem;
-  line-height: 1.3;
-  text-align: center;
-}
-.arrival-readout,
-.arrival-matrix {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-}
-.arrival-readout > div,
-.arrival-matrix > div {
-  min-width: 0;
-  padding: 9px 8px;
-  border: 1px solid rgba(245, 189, 128, .28);
-  border-radius: 7px;
-  background: rgba(27, 25, 22, .16);
-}
-.arrival-readout strong,
-.arrival-matrix strong {
-  color: #ffd398;
-  font-size: .7rem;
-  line-height: 1.25;
-}
-.arrival-readout span,
-.arrival-matrix span {
-  margin-top: 4px;
-  color: #d8d8c8;
-  font-size: .61rem;
-  line-height: 1.35;
-}
-.arrival-matrix > div { border-left: 2px solid rgba(245, 189, 128, .58); }
-
 .hud-top, .hud-bottom { position: relative; z-index: 4; }
 @media (min-width: 901px) {
   #hud { perspective: 1400px; }
@@ -163,11 +62,6 @@
 }
 @media (max-width: 900px) {
   .detail { transform: none; }
-  .arrival-trace { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 15px; }
-  .arrival-trace::before { display: none; }
-  .arrival-trace li { padding-top: 0; }
-  .arrival-trace li::before { display: none; }
-  .arrival-readout, .arrival-matrix { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   #world { transition: none; }
