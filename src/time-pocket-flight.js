@@ -5,6 +5,7 @@ const COAST_DELAY_MS = 170;
 const COAST_RATE_FAR = 12;
 const COAST_RATE_NEAR = 4.5;
 const TIME_FIELD_RADIUS = 0.085;
+const LOOP_EDGE_GUARD_PX = 18;
 const LOCK_RELEASE_DISTANCE = 0.072;
 const LOCK_ACQUIRE_DISTANCE = 0.10;
 
@@ -88,15 +89,28 @@ function fieldFor(progress) {
   return { relativeDistance, strength, rate };
 }
 
+function nearLoopEdge() {
+  const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  return scrollY <= LOOP_EDGE_GUARD_PX || maxScroll - scrollY <= LOOP_EDGE_GUARD_PX;
+}
+
 function advanceCoast(dt, rate) {
   const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
   const remaining = maxScroll - scrollY;
-  if (remaining <= 4) return;
+  if (scrollY <= LOOP_EDGE_GUARD_PX || remaining <= LOOP_EDGE_GUARD_PX) {
+    coastCarry = 0;
+    return;
+  }
 
   coastCarry += rate * dt;
   if (coastCarry < 0.5) return;
 
-  const distance = Math.min(remaining, coastCarry);
+  const distance = Math.min(remaining - LOOP_EDGE_GUARD_PX, coastCarry);
+  if (distance <= 0) {
+    coastCarry = 0;
+    return;
+  }
+
   coastCarry = 0;
   syntheticScrollUntil = performance.now() + 90;
   scrollBy(0, distance);
@@ -115,8 +129,10 @@ function animate(now) {
   updateLock(flight.progress);
   const field = fieldFor(flight.progress);
   const idleFor = now - lastUserInputTime;
+  const loopEdge = nearLoopEdge();
   const canCoast = hasFlightInput
     && !reducedMotion
+    && !loopEdge
     && idleFor >= COAST_DELAY_MS
     && !document.body.classList.contains('reading-brief');
   mode = canCoast ? 'time-pocket' : 'flight';
@@ -135,6 +151,8 @@ function animate(now) {
     ready: true,
     mode,
     hasFlightInput,
+    loopEdgeGuard: loopEdge,
+    loopEdgeGuardPx: LOOP_EDGE_GUARD_PX,
     coastStrength,
     timeFieldStrength: field.strength,
     lockedStop: lockedStop?.title || null,
