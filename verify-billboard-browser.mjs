@@ -79,18 +79,22 @@ try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready, null, { timeout: 15000 });
 
-  const distant = await moveTo(0.055);
-  const approaching = await moveTo(0.100);
-  const arming = await moveTo(0.150);
-  const active = await moveTo(0.180);
-  const passing = await moveTo(0.190);
-  const engineeringExitMid = await moveTo(0.215);
-  const engineeringExitLate = await moveTo(0.238);
+  // Preserve the original depth/interaction contract on one complete pane.
+  // Start here sits across the closed-route seam when progress is near 1, so
+  // these samples exercise distant -> approaching -> arming -> active without
+  // requiring the outgoing pane to disappear early just to expose Engineering.
+  const distant = await moveTo(0.900);
+  const approaching = await moveTo(0.940);
+  const arming = await moveTo(0.000);
+  const active = await moveTo(0.035);
+  const passing = await moveTo(0.055);
+  const startExitMid = await moveTo(0.075);
+  const startExitLate = await moveTo(0.100);
 
   const samples = [distant, approaching, arming, active, passing];
-  for (const sample of [...samples, engineeringExitMid, engineeringExitLate]) {
-    if (sample.billboard.stop !== 'Engineering') {
-      throw new Error(`Expected Engineering billboard through its full side-fade pass, got ${sample.billboard.stop} in ${sample.billboard.state}.`);
+  for (const sample of [...samples, startExitMid, startExitLate]) {
+    if (sample.billboard.stop !== 'Start here') {
+      throw new Error(`Expected Start here billboard through its full lifecycle and side-fade pass, got ${sample.billboard.stop} in ${sample.billboard.state}.`);
     }
   }
 
@@ -170,31 +174,43 @@ try {
     throw new Error(`Active front flame corona is incomplete: ${active.billboard.frontFlameCount}`);
   }
 
-  // Engineering's art is on the right, so its pane is on the left. It must
-  // continue left while fading instead of disappearing when the stop passes.
-  assertSideFade([passing, engineeringExitMid, engineeringExitLate], 'left-side Engineering exit');
+  // Start here's art is on the left, so its pane is on the right. The old pane
+  // must remain mounted and continue right until its fade is effectively done.
+  if (!(startExitLate.billboard.side > 0)) {
+    throw new Error(`Start here pane should occupy the right lane, side=${startExitLate.billboard.side}`);
+  }
+  assertSideFade([passing, startExitMid, startExitLate], 'right-side Start here exit');
+
+  // Only after Start here has completed that fade should Engineering take over.
+  // Engineering's art is on the right, so its pane is on the left; prove the
+  // same exit choreography in the opposite direction.
+  const engineeringApproaching = await moveTo(0.110);
+  const engineeringArming = await moveTo(0.145);
+  const engineeringActive = await moveTo(0.178);
+  const engineeringPassing = await moveTo(0.190);
+  const engineeringExitMid = await moveTo(0.215);
+  const engineeringExitLate = await moveTo(0.238);
+
+  for (const sample of [engineeringApproaching, engineeringArming, engineeringActive, engineeringPassing, engineeringExitMid, engineeringExitLate]) {
+    if (sample.billboard.stop !== 'Engineering') {
+      throw new Error(`Expected Engineering billboard after Start here completed its exit, got ${sample.billboard.stop} in ${sample.billboard.state}.`);
+    }
+  }
+  if (engineeringApproaching.billboard.state !== 'approaching'
+    || engineeringArming.billboard.state !== 'arming'
+    || engineeringActive.billboard.state !== 'active'
+    || engineeringPassing.billboard.state !== 'passing') {
+    throw new Error(`Engineering lifecycle mismatch after pane handoff: ${[
+      engineeringApproaching,
+      engineeringArming,
+      engineeringActive,
+      engineeringPassing,
+    ].map(sample => sample.billboard.state).join('->')}`);
+  }
   if (!(engineeringExitLate.billboard.side < 0)) {
     throw new Error(`Engineering pane should occupy the left lane, side=${engineeringExitLate.billboard.side}`);
   }
-
-  // Vault's art is on the left, so its pane is on the right. Prove the same
-  // exit behavior in the opposite direction rather than testing one side only.
-  const vaultActive = await moveTo(0.340);
-  const vaultPassing = await moveTo(0.350);
-  const vaultExitMid = await moveTo(0.375);
-  const vaultExitLate = await moveTo(0.398);
-  for (const sample of [vaultActive, vaultPassing, vaultExitMid, vaultExitLate]) {
-    if (sample.billboard.stop !== 'Vault automation') {
-      throw new Error(`Expected Vault automation billboard through right-side exit, got ${sample.billboard.stop}.`);
-    }
-  }
-  if (vaultActive.billboard.state !== 'active' || vaultPassing.billboard.state !== 'passing') {
-    throw new Error(`Vault exit did not enter from active->passing: ${vaultActive.billboard.state}->${vaultPassing.billboard.state}`);
-  }
-  if (!(vaultExitLate.billboard.side > 0)) {
-    throw new Error(`Vault pane should occupy the right lane, side=${vaultExitLate.billboard.side}`);
-  }
-  assertSideFade([vaultPassing, vaultExitMid, vaultExitLate], 'right-side Vault exit');
+  assertSideFade([engineeringPassing, engineeringExitMid, engineeringExitLate], 'left-side Engineering exit');
 
   const orbit = await page.evaluate(() => ({
     background: window.__portfolioCanvasDebug.orbitalBackground,
@@ -216,7 +232,7 @@ try {
   console.log(`[portfolio-billboard-browser] turbulentVents=rear:${active.billboard.rearFlameCount},front:${active.billboard.frontFlameCount}`);
   console.log('[portfolio-billboard-browser] flameDefinition=continuous-noise-translucent-hot-core');
   console.log('[portfolio-billboard-browser] flameLayers=rear<billboard<front');
-  console.log('[portfolio-billboard-browser] paneExit=left->left-fade,right->right-fade');
+  console.log('[portfolio-billboard-browser] paneExit=right->right-fade,left->left-fade');
 } finally {
   await browser.close();
 }
