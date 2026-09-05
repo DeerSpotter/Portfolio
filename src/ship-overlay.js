@@ -62,7 +62,10 @@ const cameraRight = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
 const shipScreenProbe = new THREE.Vector3();
+const previousCameraAnchor = new THREE.Vector3();
+const cameraTransportDelta = new THREE.Vector3();
 let poseInitialized = false;
+let cameraAnchorInitialized = false;
 let activeBankSide = 0;
 let observedLoopCycle = null;
 let bankSeamNeutralizing = false;
@@ -274,6 +277,21 @@ function animate(now) {
     .addScaledVector(worldUp, 4.5 + warpAmount * 0.8)
     .addScaledVector(cameraRight, cameraBankOffset);
   const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);
+
+  // Normal chase flight intentionally lets the camera trail the ship in world
+  // space. At the 06 -> 01 reversal that same lag is the remaining visible kick:
+  // the ship translates into the new direction while the camera is still
+  // trailing the old one. Through the seam only, transport the camera by the
+  // ship's actual frame-to-frame displacement first. The existing camera damp
+  // then acts on the relative chase offset instead of on the ship translation.
+  if (!cameraAnchorInitialized) {
+    previousCameraAnchor.copy(smoothPos);
+    cameraAnchorInitialized = true;
+  }
+  cameraTransportDelta.subVectors(smoothPos, previousCameraAnchor);
+  camera.position.addScaledVector(cameraTransportDelta, cameraSeamBlend);
+  previousCameraAnchor.copy(smoothPos);
+
   camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
 
   desiredLook.copy(smoothPos)
@@ -341,6 +359,7 @@ function animate(now) {
       bankOffset: cameraBankOffset,
       seamBlend: cameraSeamBlend,
       forwardBlend: 'wrapped-yaw-pitch',
+      translationMode: cameraSeamBlend > 0 ? 'ship-relative' : 'world-chase',
       distanceToShip: cameraDistanceToShip,
     },
     backgroundRenderer: state.engine,
