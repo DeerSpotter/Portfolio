@@ -86,7 +86,7 @@ try {
   if (!ready) throw new Error(`Packaged site did not become ready: ${url}`);
   process.env.PORTFOLIO_URL = url;
   await run('Flight baseline and hiring experience', process.execPath, ['verify-canvas.mjs']);
-  await run('Smooth ship banking through center', process.execPath, ['verify-ship-smoothness-browser.mjs']);
+  await run('Smooth ship banking through center and reloop seam', process.execPath, ['verify-ship-smoothness-browser.mjs']);
   await run('Billboard depth and interaction experience', process.execPath, ['verify-billboard-browser.mjs']);
   await run('Destination arrival briefing experience', process.execPath, ['verify-destination-browser.mjs']);
   await run('Mobile destination depth experience', process.execPath, ['verify-mobile-destination-browser.mjs']);
