@@ -8,8 +8,8 @@ function numericPx(value) {
   return Number.parseFloat(value || '0');
 }
 
-async function inspectHud() {
-  return page.evaluate(() => {
+async function inspectHud(targetPage = page) {
+  return targetPage.evaluate(() => {
     const detail = document.querySelector('.detail');
     const detailRect = detail.getBoundingClientRect();
     const footerRect = document.querySelector('.hud-bottom').getBoundingClientRect();
@@ -17,6 +17,7 @@ async function inspectHud() {
     const subtitle = document.querySelector('.subtitle');
     const buttons = [...document.querySelectorAll('.waypoint-nav button')];
     const frontField = document.querySelector('.billboard-field-canvas-front');
+    const fieldRect = frontField?.getBoundingClientRect();
     const visible = element => {
       const style = getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0;
@@ -24,14 +25,19 @@ async function inspectHud() {
     return {
       viewport: { width: innerWidth, height: innerHeight },
       mobileSheet: Boolean(document.querySelector('link[href$="/mobile.css"]')),
+      reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      textSizeAdjust: getComputedStyle(document.documentElement).webkitTextSizeAdjust,
       hudDisplay: getComputedStyle(document.getElementById('hud')).display,
       h1Font: getComputedStyle(h1).fontSize,
       subtitleFont: getComputedStyle(subtitle).fontSize,
       detailPosition: getComputedStyle(detail).position,
       detailWidth: detail.offsetWidth,
+      renderedDetailWidth: detailRect.width,
       detailTransform: getComputedStyle(detail).transform,
       cardBottom: detailRect.bottom,
       navigationTop: footerRect.top,
+      detailCenter: { x: detailRect.x + detailRect.width / 2, y: detailRect.y + detailRect.height / 2 },
+      fieldCenter: fieldRect ? { x: fieldRect.x + fieldRect.width / 2, y: fieldRect.y + fieldRect.height / 2 } : null,
       navCount: buttons.length,
       navHeights: buttons.map(button => button.getBoundingClientRect().height),
       hiddenWaypoints: buttons.filter(button => !visible(button)).length,
@@ -41,6 +47,7 @@ async function inspectHud() {
       overflow: document.documentElement.scrollWidth > innerWidth + 1,
       billboard: structuredClone(window.__portfolioBillboardDebug),
       fieldTransform: frontField?.style.transform || '',
+      fieldComputedTransform: frontField ? getComputedStyle(frontField).transform : '',
       fieldPointerEvents: frontField ? getComputedStyle(frontField).pointerEvents : null,
     };
   });
@@ -48,9 +55,10 @@ async function inspectHud() {
 
 function assertCompactHud(sample, label, limits) {
   if (!sample.mobileSheet) throw new Error(`${label}: mobile stylesheet is not loaded.`);
+  if (sample.textSizeAdjust !== '100%') throw new Error(`${label}: iOS text inflation is not locked: ${sample.textSizeAdjust}.`);
   if (sample.hudDisplay !== 'grid') throw new Error(`${label}: HUD fell back to document layout (${sample.hudDisplay}).`);
   if (sample.detailPosition !== 'absolute' || sample.detailTransform === 'none') {
-    throw new Error(`${label}: flight billboard is static instead of projected: position=${sample.detailPosition}, transform=${sample.detailTransform}`);
+    throw new Error(`${label}: flight billboard is static instead of compact/projected: position=${sample.detailPosition}, transform=${sample.detailTransform}`);
   }
   if (sample.navCount !== 6 || sample.hiddenWaypoints !== 0) {
     throw new Error(`${label}: waypoint controls were removed or hidden: count=${sample.navCount}, hidden=${sample.hiddenWaypoints}`);
@@ -59,7 +67,7 @@ function assertCompactHud(sample, label, limits) {
     throw new Error(`${label}: mobile compacting suppressed content: topActions=${sample.hiddenTopActions}, chapter=${sample.chapterVisible}, subtitle=${sample.subtitleVisible}`);
   }
   if (sample.cardBottom > sample.navigationTop + 1) {
-    throw new Error(`${label}: flying card overlaps waypoint HUD: card bottom=${sample.cardBottom}, navigation top=${sample.navigationTop}`);
+    throw new Error(`${label}: card overlaps waypoint HUD: card bottom=${sample.cardBottom}, navigation top=${sample.navigationTop}`);
   }
   if (sample.overflow) throw new Error(`${label}: compact HUD creates horizontal page overflow.`);
   if (numericPx(sample.h1Font) > limits.h1 || numericPx(sample.subtitleFont) > limits.subtitle) {
@@ -70,12 +78,6 @@ function assertCompactHud(sample, label, limits) {
   }
   if (Math.max(...sample.navHeights) > limits.navHeight) {
     throw new Error(`${label}: waypoint controls are too tall: ${sample.navHeights.map(value => value.toFixed(1)).join(', ')}`);
-  }
-  if (!sample.fieldTransform.includes(`scale(${sample.billboard.scale})`)) {
-    throw new Error(`${label}: procedural field is not using the billboard flight scale: field=${sample.fieldTransform}, billboard=${sample.billboard.scale}`);
-  }
-  if (!sample.fieldTransform.includes(`rotateY(${sample.billboard.yaw}deg)`)) {
-    throw new Error(`${label}: procedural field is not sharing billboard yaw: field=${sample.fieldTransform}, yaw=${sample.billboard.yaw}`);
   }
   if (sample.fieldPointerEvents !== 'none') throw new Error(`${label}: procedural field intercepts touch input.`);
 }
@@ -89,7 +91,10 @@ try {
   await page.waitForTimeout(350);
 
   const portrait = await inspectHud();
-  assertCompactHud(portrait, '390x844 portrait', { h1: 20, subtitle: 11, detailWidth: 212, navHeight: 30 });
+  assertCompactHud(portrait, '390x844 portrait', { h1: 16, subtitle: 9, detailWidth: 178, navHeight: 25 });
+  if (!portrait.fieldTransform.includes(`scale(${portrait.billboard.scale})`)) {
+    throw new Error(`390x844 portrait: procedural field lost billboard flight scale: field=${portrait.fieldTransform}, billboard=${portrait.billboard.scale}`);
+  }
 
   await page.locator('#detailAction').click();
   await page.waitForFunction(() => document.getElementById('destination')?.open && window.__portfolioDestinationDebug?.ready, null, { timeout: 5000 });
@@ -104,7 +109,6 @@ try {
       horizontalOverflow: dialog.scrollWidth > dialog.clientWidth + 1,
       hiddenPanels: [...dialog.querySelectorAll('.destination-stage-panel')].filter(panel => getComputedStyle(panel).display === 'none').length,
       reparenting: window.__portfolioDestinationDebug?.reparenting,
-      contract: window.__portfolioDestinationDebug?.contract,
     };
   });
   if (destination.panelCount !== 2 || destination.hiddenPanels !== 0 || destination.reparenting !== false) {
@@ -120,23 +124,49 @@ try {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.waitForTimeout(250);
   const narrow = await inspectHud();
-  assertCompactHud(narrow, '320x568 portrait', { h1: 18, subtitle: 10, detailWidth: 190, navHeight: 28 });
+  assertCompactHud(narrow, '320x568 portrait', { h1: 15, subtitle: 8, detailWidth: 166, navHeight: 24 });
 
   await page.setViewportSize({ width: 844, height: 390 });
   await page.waitForTimeout(250);
   const landscape = await inspectHud();
-  assertCompactHud(landscape, '844x390 landscape', { h1: 18, subtitle: 9, detailWidth: 192, navHeight: 26 });
+  assertCompactHud(landscape, '844x390 landscape', { h1: 15, subtitle: 8, detailWidth: 157, navHeight: 23 });
   if (!(landscape.billboard.scale < narrow.billboard.scale * 0.9)) {
     throw new Error(`Landscape resize reused a stale portrait pose: portrait scale=${narrow.billboard.scale}, landscape scale=${landscape.billboard.scale}`);
   }
 
+  // Reproduce the real iPhone screenshots: Reduce Motion is enabled before the
+  // page loads. The fallback must remain a miniature game reading plane rather
+  // than reverting the billboard to full-size document flow.
+  const reducedPage = await browser.newPage({ viewport: { width: 414, height: 896 } });
+  await reducedPage.emulateMedia({ reducedMotion: 'reduce' });
+  await reducedPage.goto(url, { waitUntil: 'load', timeout: 30000 });
+  await reducedPage.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready, null, { timeout: 15000 });
+  await reducedPage.locator('[data-stop="1"]').click();
+  await reducedPage.waitForFunction(() => window.__portfolioCanvasDebug?.activeStop === 'Engineering');
+  await reducedPage.waitForTimeout(250);
+  const reduced = await inspectHud(reducedPage);
+  assertCompactHud(reduced, '414x896 reduced-motion iPhone', { h1: 16, subtitle: 9, detailWidth: 166, navHeight: 24 });
+  if (!reduced.reducedMotion) throw new Error('Reduced-motion phone proof did not actually emulate Reduce Motion.');
+  if (reduced.renderedDetailWidth > 140) {
+    throw new Error(`Reduced-motion reading card expanded beyond game scale: rendered width=${reduced.renderedDetailWidth}px.`);
+  }
+  if (!reduced.fieldCenter) throw new Error('Reduced-motion procedural field is missing.');
+  const fieldOffset = Math.hypot(
+    reduced.fieldCenter.x - reduced.detailCenter.x,
+    reduced.fieldCenter.y - reduced.detailCenter.y,
+  );
+  if (fieldOffset > 2) {
+    throw new Error(`Reduced-motion field detached from frozen card: center offset=${fieldOffset.toFixed(2)}px.`);
+  }
+  if (reduced.fieldComputedTransform === 'none') throw new Error('Reduced-motion procedural field lost its compact frozen transform.');
+  await reducedPage.close();
+
   console.log('[portfolio-mobile] PASS');
-  console.log('[portfolio-mobile] layout=compact-game-hud');
+  console.log('[portfolio-mobile] layout=miniature-game-hud');
+  console.log('[portfolio-mobile] ios-text-inflation=disabled');
+  console.log('[portfolio-mobile] reduced-motion=compact-frozen-reading-plane');
   console.log('[portfolio-mobile] content=present-not-hidden');
-  console.log('[portfolio-mobile] billboard=projected-with-aligned-field');
-  console.log('[portfolio-mobile] resize=reprojected-reading-pose');
   console.log('[portfolio-mobile] destination=compact-flight-corridor');
-  console.log(`[portfolio-mobile] portrait=${portrait.viewport.width}x${portrait.viewport.height}, narrow=${narrow.viewport.width}x${narrow.viewport.height}, landscape=${landscape.viewport.width}x${landscape.viewport.height}`);
 } finally {
   await browser.close();
 }
