@@ -206,6 +206,12 @@ function animate(now) {
       pitch: ship.rotation.x,
       yaw: ship.rotation.y,
       roll: ship.rotation.z,
+      quaternion: {
+        x: ship.quaternion.x,
+        y: ship.quaternion.y,
+        z: ship.quaternion.z,
+        w: ship.quaternion.w,
+      },
     },
     camera: {
       x: camera.position.x,
