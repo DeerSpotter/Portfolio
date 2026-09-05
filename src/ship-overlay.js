@@ -63,6 +63,7 @@ let activeBankSide = 0;
 
 const BANK_DEADBAND = 0.035;
 const BANK_CENTER_EPSILON = 0.025;
+const BANK_MAX_ROLL_RATE = 2.2;
 const REDUCED_MOTION_BANK_SCALE = 0.62;
 
 function wrap01(value) {
@@ -168,7 +169,18 @@ function animate(now) {
   const attitudeLambda = Math.max(3.4, 8.5 - coastAmount * 3.2 - timeFieldAmount * 1.2);
   ship.rotation.y = dampAngle(ship.rotation.y, yaw, attitudeLambda, dt);
   ship.rotation.x = dampAngle(ship.rotation.x, -pitch * 0.86, attitudeLambda, dt);
-  ship.rotation.z = dampAngle(ship.rotation.z, bankTargetRoll, Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount), dt);
+
+  // Keep the familiar exponential ease, but bound only the roll axis so a
+  // sudden change in curvature cannot produce a one-frame bank jolt. This does
+  // not affect route position, yaw, pitch, camera motion, or travel speed.
+  const rollLambda = Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount);
+  const easedRoll = dampAngle(ship.rotation.z, bankTargetRoll, rollLambda, dt);
+  const rollDelta = Math.atan2(
+    Math.sin(easedRoll - ship.rotation.z),
+    Math.cos(easedRoll - ship.rotation.z),
+  );
+  const maxBankStep = BANK_MAX_ROLL_RATE * dt;
+  ship.rotation.z += THREE.MathUtils.clamp(rollDelta, -maxBankStep, maxBankStep);
 
   setShipEngineState(ship, {
     thrust: warpAmount,
@@ -215,6 +227,7 @@ function animate(now) {
       turnSignal,
       targetRoll,
       appliedTargetRoll: bankTargetRoll,
+      maxRollRate: BANK_MAX_ROLL_RATE,
       reducedMotionScale: bankMotionScale,
     },
     exhaust: 'turbulent-nozzle-rooted-shader-v1',
