@@ -3,6 +3,14 @@
 @media (min-width: 901px) {
   #hud { perspective: 1400px; }
 
+  #world {
+    transition: filter 420ms ease;
+  }
+
+  body[data-flight-mode='time-pocket'] #world {
+    filter: saturate(.90) contrast(.97) brightness(1.018);
+  }
+
   .detail {
     --billboard-x: 50vw;
     --billboard-y: 50vh;
@@ -14,6 +22,7 @@
     --billboard-glow: 0;
     --billboard-color: var(--rust);
     --coast-strength: 0;
+    --time-field: 0;
 
     position: absolute;
     left: 0;
@@ -102,13 +111,13 @@
     animation: billboard-breathe 2.8s ease-in-out infinite;
     box-shadow:
       0 26px 62px rgba(77, 53, 24, .16),
-      0 0 calc(36px + 22px * var(--coast-strength)) color-mix(in srgb, var(--billboard-color) 34%, transparent),
-      0 0 calc(82px + 34px * var(--coast-strength)) color-mix(in srgb, var(--billboard-color) 16%, transparent);
+      0 0 calc(34px + 28px * var(--time-field)) color-mix(in srgb, var(--billboard-color) 34%, transparent),
+      0 0 calc(78px + 48px * var(--time-field)) color-mix(in srgb, var(--billboard-color) 16%, transparent);
   }
 
   .detail[data-time-pocket='true']::after {
     animation-duration: 2.4s;
-    opacity: .52;
+    opacity: calc(.38 + .20 * var(--time-field));
   }
 
   .detail[data-billboard-state='passing'] {
@@ -137,6 +146,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) and (min-width: 901px) {
+  #world { transition: none; }
+  body[data-flight-mode='time-pocket'] #world { filter: none; }
   .detail,
   .detail::after {
     animation: none !important;
