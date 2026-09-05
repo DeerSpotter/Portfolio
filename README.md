@@ -35,7 +35,7 @@ The portfolio presents Maxim's engineering judgment and AI-assisted development 
 
 The brief explains the problem, design decision, and evidence for each project. ContextPort and ipaSim link to public source and a merged implementation. Vault work is explicitly described as a private project. ipaSim is credited as an active fork extending Jan Joneš's original research; a storage milestone is not presented as completed iOS compatibility. Career statements describe Maxim's experience, without invented impact metrics or customer adoption claims.
 
-The tailored Deepgram section maps that work to the Staff Developer Experience Engineer role. It describes proposed contributions and links to the employer's posting. The rest of the portfolio is written for engineering, developer-tooling, and AI product teams generally. A direct entry to the tailored brief is available at:
+The tailored Deepgram section maps that work to the Staff Developer Experience Engineer role. It describes proposed contributions without retaining an external employer job-posting link. The rest of the portfolio is written for engineering, developer-tooling, and AI product teams generally. A direct entry to the tailored brief is available at:
 
 ```text
 https://deerspotter.github.io/Portfolio/?brief=deepgram
