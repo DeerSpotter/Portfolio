@@ -175,7 +175,37 @@ export function showWaypointStage(waypoint, requestedStage, { immediate = false 
 
   const waypointIndex = waypoints.indexOf(waypoint);
   status.textContent = `Waypoint ${waypointIndex + 1} of ${waypoints.length}: ${waypoint.title} · Brief ${stageIndex + 1} of ${stages.length}`;
+  window.__portfolioArrivalDebug = {
+    ready: true,
+    waypoint: waypoint.title,
+    stage: stageIndex,
+    stages: stages.length,
+    visual: stages[stageIndex].visual?.type || null,
+    contract: 'scroll-staged-arrival-brief-v1',
+  };
 }
+
+function stageForDepth(waypoint, depth) {
+  const count = waypoint.briefing?.length || 1;
+  if (count <= 1) return 0;
+  // The existing billboard approaches through roughly t=.34 to t=.78. Divide
+  // only that readable approach into briefing beats; the world timeline stays
+  // untouched and reverse scrolling naturally walks the same beats backward.
+  const progress = Math.max(0, Math.min(0.9999, (depth - 0.36) / 0.42));
+  return Math.min(count - 1, Math.floor(progress * count));
+}
+
+function syncBriefingSequence() {
+  const debug = window.__portfolioBillboardDebug;
+  if (debug?.ready) {
+    const waypoint = waypoints.find(candidate => candidate.title === debug.stop);
+    if (waypoint && waypoints.indexOf(waypoint) === displayed) {
+      showWaypointStage(waypoint, stageForDepth(waypoint, debug.depth));
+    }
+  }
+  requestAnimationFrame(syncBriefingSequence);
+}
+requestAnimationFrame(syncBriefingSequence);
 
 navigation.forEach(button => {
   button.addEventListener('click', () => {
@@ -232,9 +262,6 @@ const hud = document.getElementById('hud');
 hud.addEventListener('wheel', event => {
   if (hud.scrollHeight > hud.clientHeight + 1) event.stopPropagation();
 }, { passive: true });
-
-// Content initialization and restored-scroll updates belong to billboard-flight.
-// A separate nearest-stop writer would mismatch content and projected depth.
 
 if (new URLSearchParams(location.search).get('brief') === 'deepgram') {
   openBrief('deepgram', document.querySelector('[data-open-brief="deepgram"]'));
