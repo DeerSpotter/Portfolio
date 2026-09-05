@@ -45,7 +45,10 @@ function chooseStop(progress, activeTitle) {
   let bestScore = Infinity;
   for (const stop of waypoints) {
     const rel = wrapSigned(stop.at - progress);
-    if (rel < -0.055 || rel > 0.34) continue;
+    // Once a billboard has clearly passed the ship, hand off to the next stop
+    // immediately. That gives the next billboard enough distance to be seen
+    // tiny near the vanishing point before its final approach.
+    if (rel < -0.012 || rel > 0.34) continue;
     const score = rel < 0 ? Math.abs(rel) * 0.6 : rel;
     if (score < bestScore) {
       best = stop;
@@ -95,7 +98,7 @@ function project(stop, progress) {
   const skew = side * (-6.0 + t * 3.4);
 
   let state = 'distant';
-  if (rel < -0.015) state = 'passing';
+  if (rel < -0.006) state = 'passing';
   else if (t >= 0.76) state = 'active';
   else if (t >= 0.61) state = 'arming';
   else if (t >= 0.34) state = 'approaching';
@@ -113,7 +116,7 @@ function project(stop, progress) {
     side,
     pass,
     state,
-    interactive: (state === 'arming' || state === 'active') && rel > -0.02,
+    interactive: (state === 'arming' || state === 'active') && rel > -0.006,
   };
 }
 
