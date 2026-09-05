@@ -15,14 +15,22 @@ for (const required of [
   'const BANK_MAX_ROLL_RATE = 2.2;',
   'const BANK_SEAM_APPROACH_PROGRESS = 0.10;',
   'const BANK_SEAM_RELEASE_PROGRESS = 0.04;',
+  'const SHIP_SEAM_CAMERA_BLEND_IN = 0.82;',
+  'const SHIP_SEAM_CAMERA_LOCK_PROGRESS = 0.90;',
+  'const SHIP_SEAM_CAMERA_RELEASE_PROGRESS = 0.04;',
+  'const SHIP_SEAM_CAMERA_BLEND_OUT = 0.10;',
   'const REDUCED_MOTION_BANK_SCALE = 0.62;',
   'turnSignal * 2.55 * coastCalm * bankMotionScale',
   'loopCycle !== observedLoopCycle',
   'const seamNeutralZone = progress >= 1 - BANK_SEAM_APPROACH_PROGRESS',
   'bankSeamNeutralizing = true;',
   'const cameraBankOffset = -ship.rotation.z * 0.92;',
+  'cameraForward.copy(smoothTangent).lerp(shipForward, cameraSeamBlend).normalize();',
+  'shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();',
+  'screenX: shipScreenX',
+  'distanceToShip: cameraDistanceToShip',
   'requestedBankSide !== activeBankSide',
-  "motionContract: 'known-good-flight-centered-bank-v4'",
+  "motionContract: 'known-good-flight-centered-bank-v5'",
 ]) {
   if (!source.includes(required)) throw new Error(`Centered-bank contract missing: ${required}`);
 }
@@ -46,7 +54,7 @@ async function exercise(viewport, label, reducedMotion = false) {
   await page.waitForTimeout(250);
 
   const initialContract = await page.evaluate(() => window.__portfolioShipDebug?.motionContract);
-  if (initialContract !== 'known-good-flight-centered-bank-v4') {
+  if (initialContract !== 'known-good-flight-centered-bank-v5') {
     throw new Error(`${label}: wrong ship motion contract: ${initialContract}`);
   }
 
@@ -138,50 +146,45 @@ async function exercise(viewport, label, reducedMotion = false) {
     const result = [];
     const max = document.documentElement.scrollHeight - innerHeight;
 
-    scrollTo(0, max * 0.84);
+    const capture = phase => {
+      const ship = window.__portfolioShipDebug;
+      const canvas = window.__portfolioCanvasDebug;
+      result.push({
+        phase,
+        progress: canvas.progress,
+        roll: ship.ship.roll,
+        screenX: ship.ship.screenX,
+        screenY: ship.ship.screenY,
+        cameraBankOffset: ship.camera.bankOffset,
+        cameraSeamBlend: ship.camera.seamBlend,
+        cameraDistanceToShip: ship.camera.distanceToShip,
+        activeSide: ship.bank.activeSide,
+        appliedTargetRoll: ship.bank.appliedTargetRoll,
+        neutralizing: ship.bank.seamNeutralizing,
+        neutralZone: ship.bank.seamNeutralZone,
+        seamDistance: ship.bank.seamDistance,
+        loopCycle: ship.bank.loopCycle,
+      });
+    };
+
+    scrollTo(0, max * 0.80);
     for (let frame = 0; frame < 30; frame++) await new Promise(requestAnimationFrame);
     const cycleBefore = window.__portfolioCanvasDebug.loopCycle;
 
-    // Approach the 06 -> 01 seam without recycling yet. The ship must already
-    // begin returning to level so the roll-relative chase-camera offset is
-    // settled before loopCycle changes.
-    for (let frame = 0; frame < 90; frame++) {
-      const t = frame / 89;
-      scrollTo(0, max * (0.84 + 0.16 * t));
+    // Move forward through the exact area visible in the supplied recording.
+    // The closed route's tangent reverses just before the wrap; the rendered
+    // ship must remain in a stable chase-camera corridor while that happens.
+    for (let frame = 0; frame < 120; frame++) {
+      const t = frame / 119;
+      scrollTo(0, max * (0.80 + 0.20 * t));
       await new Promise(requestAnimationFrame);
-      const ship = window.__portfolioShipDebug;
-      const canvas = window.__portfolioCanvasDebug;
-      result.push({
-        phase: 'approach',
-        progress: canvas.progress,
-        roll: ship.ship.roll,
-        cameraBankOffset: ship.camera.bankOffset,
-        activeSide: ship.bank.activeSide,
-        appliedTargetRoll: ship.bank.appliedTargetRoll,
-        neutralizing: ship.bank.seamNeutralizing,
-        neutralZone: ship.bank.seamNeutralZone,
-        seamDistance: ship.bank.seamDistance,
-        loopCycle: ship.bank.loopCycle,
-      });
+      capture('approach');
     }
 
     scrollTo(0, max);
-    for (let frame = 0; frame < 30; frame++) {
+    for (let frame = 0; frame < 24; frame++) {
       await new Promise(requestAnimationFrame);
-      const ship = window.__portfolioShipDebug;
-      const canvas = window.__portfolioCanvasDebug;
-      result.push({
-        phase: 'pre-wrap-settle',
-        progress: canvas.progress,
-        roll: ship.ship.roll,
-        cameraBankOffset: ship.camera.bankOffset,
-        activeSide: ship.bank.activeSide,
-        appliedTargetRoll: ship.bank.appliedTargetRoll,
-        neutralizing: ship.bank.seamNeutralizing,
-        neutralZone: ship.bank.seamNeutralZone,
-        seamDistance: ship.bank.seamDistance,
-        loopCycle: ship.bank.loopCycle,
-      });
+      capture('pre-wrap-settle');
     }
 
     dispatchEvent(new WheelEvent('wheel', { deltaY: 1000, cancelable: true }));
@@ -195,42 +198,17 @@ async function exercise(viewport, label, reducedMotion = false) {
       }
     }
 
-    for (let frame = 0; frame < 36; frame++) {
+    for (let frame = 0; frame < 42; frame++) {
       await new Promise(requestAnimationFrame);
-      const ship = window.__portfolioShipDebug;
-      const canvas = window.__portfolioCanvasDebug;
-      result.push({
-        phase: 'seam',
-        progress: canvas.progress,
-        roll: ship.ship.roll,
-        cameraBankOffset: ship.camera.bankOffset,
-        activeSide: ship.bank.activeSide,
-        appliedTargetRoll: ship.bank.appliedTargetRoll,
-        neutralizing: ship.bank.seamNeutralizing,
-        neutralZone: ship.bank.seamNeutralZone,
-        seamDistance: ship.bank.seamDistance,
-        loopCycle: ship.bank.loopCycle,
-      });
+      capture('seam');
     }
 
-    scrollTo(0, max * 0.08);
-    for (let frame = 0; frame < 100; frame++) {
+    scrollTo(0, max * 0.10);
+    for (let frame = 0; frame < 120; frame++) {
       await new Promise(requestAnimationFrame);
+      capture('release');
       const ship = window.__portfolioShipDebug;
-      const canvas = window.__portfolioCanvasDebug;
-      result.push({
-        phase: 'release',
-        progress: canvas.progress,
-        roll: ship.ship.roll,
-        cameraBankOffset: ship.camera.bankOffset,
-        activeSide: ship.bank.activeSide,
-        appliedTargetRoll: ship.bank.appliedTargetRoll,
-        neutralizing: ship.bank.seamNeutralizing,
-        neutralZone: ship.bank.seamNeutralZone,
-        seamDistance: ship.bank.seamDistance,
-        loopCycle: ship.bank.loopCycle,
-      });
-      if (!ship.bank.seamNeutralizing && ship.bank.seamDistance >= 0.04) break;
+      if (!ship.bank.seamNeutralizing && ship.bank.seamDistance >= 0.04 && ship.camera.seamBlend < 0.02) break;
     }
 
     return { cycleBefore, cycleChanged, result };
@@ -247,6 +225,15 @@ async function exercise(viewport, label, reducedMotion = false) {
   );
   if (!preLevel) {
     throw new Error(`${label}: ship did not begin leveling before the 06 -> 01 loopCycle wrap.`);
+  }
+
+  const cameraLockedBeforeWrap = approachFrames.find(sample =>
+    sample.loopCycle === seam.cycleBefore
+    && sample.progress >= 0.91
+    && sample.cameraSeamBlend >= 0.98
+  );
+  if (!cameraLockedBeforeWrap) {
+    throw new Error(`${label}: chase camera did not attach to rendered ship before route-tangent reversal.`);
   }
 
   const preWrapSettled = [...approachFrames].reverse().find(sample =>
@@ -284,6 +271,51 @@ async function exercise(viewport, label, reducedMotion = false) {
     throw new Error(`${label}: chase-camera bank offset still kicks sideways through reloop: max offset=${maxSeamCameraBankOffset}`);
   }
 
+  // This is the regression that corresponds to the supplied video. While the
+  // camera seam blend is effectively locked, the visible ship may not launch
+  // across the viewport or collapse toward the camera and then recover.
+  const visualSeamFrames = seam.result.filter(sample =>
+    sample.cameraSeamBlend >= 0.95
+    && Number.isFinite(sample.screenX)
+    && Number.isFinite(sample.screenY)
+    && Number.isFinite(sample.cameraDistanceToShip)
+  );
+  if (visualSeamFrames.length < 12) {
+    throw new Error(`${label}: insufficient screen-space seam samples: ${visualSeamFrames.length}`);
+  }
+
+  let minScreenX = Infinity;
+  let maxScreenX = -Infinity;
+  let maxScreenStep = 0;
+  let maxCenterDeviation = 0;
+  let minCameraDistance = Infinity;
+  let maxCameraDistance = 0;
+  for (let index = 0; index < visualSeamFrames.length; index++) {
+    const current = visualSeamFrames[index];
+    minScreenX = Math.min(minScreenX, current.screenX);
+    maxScreenX = Math.max(maxScreenX, current.screenX);
+    maxCenterDeviation = Math.max(maxCenterDeviation, Math.abs(current.screenX - viewport.width / 2));
+    minCameraDistance = Math.min(minCameraDistance, current.cameraDistanceToShip);
+    maxCameraDistance = Math.max(maxCameraDistance, current.cameraDistanceToShip);
+    if (index > 0) {
+      maxScreenStep = Math.max(maxScreenStep, Math.abs(current.screenX - visualSeamFrames[index - 1].screenX));
+    }
+  }
+
+  const screenRange = maxScreenX - minScreenX;
+  if (screenRange > viewport.width * 0.20) {
+    throw new Error(`${label}: ship still shoots sideways through 06 -> 01 seam: x range=${screenRange}px (${minScreenX}->${maxScreenX}).`);
+  }
+  if (maxScreenStep > viewport.width * 0.08) {
+    throw new Error(`${label}: ship still has a one-frame lateral seam jump: max x step=${maxScreenStep}px.`);
+  }
+  if (maxCenterDeviation > viewport.width * 0.24) {
+    throw new Error(`${label}: ship leaves the chase-camera center corridor at seam: max deviation=${maxCenterDeviation}px.`);
+  }
+  if (minCameraDistance <= 0 || maxCameraDistance / minCameraDistance > 1.75) {
+    throw new Error(`${label}: ship still surges toward/away from camera at seam: distance=${minCameraDistance}->${maxCameraDistance}.`);
+  }
+
   const seamSigns = new Set(
     neutralFrames
       .filter(sample => Math.abs(sample.roll) > 0.02)
@@ -299,7 +331,7 @@ async function exercise(viewport, label, reducedMotion = false) {
     throw new Error(`${label}: bank released before it was level and clear of the seam: ${JSON.stringify(release)}`);
   }
 
-  console.log(`[portfolio-ship-bank] ${label} PASS progress=${progressTravel.toFixed(3)} right=${positivePeak.toFixed(3)} left=${negativePeak.toFixed(3)} centerFrames=${centerGateFrames} transitions=${oppositeSideTransitions} maxRollStep=${maxRollStep.toFixed(4)} seamStep=${maxSeamRollStep.toFixed(4)} seamCamera=${maxSeamCameraBankOffset.toFixed(4)}`);
+  console.log(`[portfolio-ship-bank] ${label} PASS progress=${progressTravel.toFixed(3)} right=${positivePeak.toFixed(3)} left=${negativePeak.toFixed(3)} centerFrames=${centerGateFrames} transitions=${oppositeSideTransitions} maxRollStep=${maxRollStep.toFixed(4)} seamStep=${maxSeamRollStep.toFixed(4)} seamCamera=${maxSeamCameraBankOffset.toFixed(4)} screenRange=${screenRange.toFixed(1)} maxScreenStep=${maxScreenStep.toFixed(1)} cameraDistance=${minCameraDistance.toFixed(2)}-${maxCameraDistance.toFixed(2)}`);
   await page.close();
 }
 
@@ -309,9 +341,10 @@ try {
   console.log('[portfolio-ship-bank] PASS');
   console.log('[portfolio-ship-bank] sequence=bank-right-center-bank-left-center');
   console.log('[portfolio-ship-bank] reloop=prelevel-before-06-to-01-wrap');
-  console.log('[portfolio-ship-bank] camera=bank-offset-settled-before-wrap');
+  console.log('[portfolio-ship-bank] camera=rendered-ship-forward-through-antipodal-route-tangent');
+  console.log('[portfolio-ship-bank] visual=screen-space-seam-launch-regression');
   console.log('[portfolio-ship-bank] input=signed-route-curvature-only');
-  console.log('[portfolio-ship-bank] scope=roll-seam-only-known-good-flight-preserved');
+  console.log('[portfolio-ship-bank] scope=ship-seam-only-panes-and-route-unchanged');
 } finally {
   await browser.close();
 }
