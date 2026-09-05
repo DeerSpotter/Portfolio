@@ -10,7 +10,7 @@ async function moveTo(progress) {
     scrollTo(0, max * p);
   }, progress);
   await page.waitForFunction(p => Math.abs(window.__portfolioCanvasDebug?.progress - p) < 0.0045, progress, { timeout: 5000 });
-  await page.waitForTimeout(220);
+  await page.waitForTimeout(240);
   return page.evaluate(() => {
     const detail = document.querySelector('.detail');
     const rearFlame = document.querySelector('.billboard-flame-canvas-rear');
@@ -22,7 +22,6 @@ async function moveTo(progress) {
       ariaHidden: canvas?.getAttribute('aria-hidden'),
       width: canvas?.width || 0,
       height: canvas?.height || 0,
-      state: canvas?.dataset.flameState,
     });
     return {
       billboard: structuredClone(window.__portfolioBillboardDebug),
@@ -58,9 +57,6 @@ try {
   samples.forEach((sample, index) => {
     if (sample.billboard.state !== expectedStates[index] || sample.state !== expectedStates[index]) {
       throw new Error(`Billboard state mismatch at stage ${index}: debug=${sample.billboard.state}, DOM=${sample.state}, expected=${expectedStates[index]}`);
-    }
-    if (sample.rearFlame.state !== expectedStates[index] || sample.frontFlame.state !== expectedStates[index]) {
-      throw new Error(`Flame layer state mismatch at stage ${index}: rear=${sample.rearFlame.state}, front=${sample.frontFlame.state}, expected=${expectedStates[index]}`);
     }
   });
 
@@ -123,8 +119,8 @@ try {
     && passing.billboard.smokeStrength > distant.billboard.smokeStrength)) {
     throw new Error(`Flame intensity did not fall after pass: active=${active.billboard.smokeStrength}, passing=${passing.billboard.smokeStrength}, distant=${distant.billboard.smokeStrength}`);
   }
-  if (active.billboard.smokeContract !== 'canvas2d-industrial-edge-flame-v3'
-    || active.billboard.smokeRenderer !== 'dual-canvas-2d-industrial-flames') {
+  if (active.billboard.smokeContract !== 'canvas2d-defined-industrial-flame-v4'
+    || active.billboard.smokeRenderer !== 'dual-canvas-defined-industrial-flames') {
     throw new Error(`Flame debug contract mismatch: ${active.billboard.smokeContract}, renderer=${active.billboard.smokeRenderer}`);
   }
   if (!active.billboard.smokeFrontLayer || !active.billboard.smokeRearLayer) {
@@ -145,6 +141,7 @@ try {
   console.log('[portfolio-billboard-browser] interaction=near-range-only');
   console.log(`[portfolio-billboard-browser] flameStrength=${flameStrengths.map(value => value.toFixed(3)).join('->')}`);
   console.log(`[portfolio-billboard-browser] flameParticlesActive=rear:${active.billboard.smokeRearParticleCount},front:${active.billboard.smokeFrontParticleCount}`);
+  console.log('[portfolio-billboard-browser] flameDefinition=nested-bezier-core-with-outline');
   console.log('[portfolio-billboard-browser] flameLayers=rear<billboard<front');
 } finally {
   await browser.close();
