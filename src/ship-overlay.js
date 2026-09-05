@@ -91,6 +91,27 @@ function smoothstep(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
+function blendForwardDirection(out, from, to, amount) {
+  if (amount <= 0) return out.copy(from);
+  if (amount >= 1) return out.copy(to);
+
+  const fromYaw = Math.atan2(-from.x, -from.z);
+  const toYaw = Math.atan2(-to.x, -to.z);
+  const yawDelta = Math.atan2(Math.sin(toYaw - fromYaw), Math.cos(toYaw - fromYaw));
+  const yaw = fromYaw + yawDelta * amount;
+
+  const fromPitch = Math.asin(clamp(from.y, -1, 1));
+  const toPitch = Math.asin(clamp(to.y, -1, 1));
+  const pitch = THREE.MathUtils.lerp(fromPitch, toPitch, amount);
+  const cosPitch = Math.cos(pitch);
+
+  return out.set(
+    -Math.sin(yaw) * cosPitch,
+    Math.sin(pitch),
+    -Math.cos(yaw) * cosPitch,
+  ).normalize();
+}
+
 function damp(current, target, lambda, dt) {
   return THREE.MathUtils.lerp(current, target, 1 - Math.exp(-lambda * dt));
 }
@@ -238,11 +259,12 @@ function animate(now) {
   // point from one side of the ship to the other and makes the ship appear to
   // launch across the viewport. Do not rewrite the route. Instead, only in this
   // seam corridor, attach the camera basis to the already rendered ship body.
-  // The body's yaw/pitch are angle-damped, so the camera follows the visible
-  // vehicle continuously while the bookkeeping route direction reverses.
+  // Blend by wrapped yaw and pitch rather than normalized vector lerp: linear
+  // interpolation of nearly opposite unit vectors collapses toward zero and can
+  // itself create the one-frame camera flip that this seam path is preventing.
   shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
   const cameraSeamBlend = seamCameraBlend(progress);
-  cameraForward.copy(smoothTangent).lerp(shipForward, cameraSeamBlend).normalize();
+  blendForwardDirection(cameraForward, smoothTangent, shipForward, cameraSeamBlend);
   cameraRight.crossVectors(cameraForward, worldUp).normalize();
   if (cameraRight.lengthSq() < 0.001) cameraRight.set(1, 0, 0);
 
@@ -277,7 +299,7 @@ function animate(now) {
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-flight-centered-bank-v5',
+    motionContract: 'known-good-flight-centered-bank-v6',
     cameraType: 'perspective',
     progress,
     velocity,
