@@ -159,3 +159,36 @@ and approach motion. Reduced motion freezes ambient travel. Billboard flame
 flows are wider and denser; engine exhaust widens beyond the attached nozzle.
 
 No local tests were run for this change, as requested.
+
+## Stable billboard ownership and technical arrivals
+
+The billboard controller now owns story selection, destination links, chapter
+labels, and projected geometry together. The world renderer no longer writes a
+competing nearest-stop story into the same HTML card. The UI presents the chosen
+story directly, without independently choosing a different stop. Its procedural
+shell measures changed content in the same frame; all planes use the same pose
+precision. Releasing a reading hold blends back into flight instead of snapping.
+
+Destinations now use a single technical dossier layout: a project headline,
+framed live facility viewport, and parallel evidence panels. All original copy
+and links remain available, with vertical scrolling on small screens or enlarged
+text. The six facilities retain their settings and add articulated service arms,
+grippers, assembly platforms and instrument tracks. The scene sizes itself to
+its own viewport rather than the browser window. No local tests were run.
+
+### Clickable reading stops
+
+Selecting a waypoint now anchors its reading plane after the approach settles.
+Hover or keyboard focus also anchors the currently presented plane. Automatic
+coasting pauses during these interactions, while ambient rocks, flames, and
+facility animation continue. Explicit flight input outside the billboard
+releases the anchor; selecting another waypoint replaces it. This fixes the
+reported `#detailAction` stability timeout without forced clicks or longer test
+timeouts. No local tests were run for this correction.
+
+Slow-pass mode now remains active during a reading anchor; only automatic
+forward travel pauses. The debug state reports `readingHold` and `advancing`
+separately. Wheel/keyboard travel over waypoint controls releases the anchor,
+and real user input bypasses the synthetic-scroll guard. This corrects the
+slow-pass timeout at `verify-time-pocket-browser.mjs:124` without changing its
+assertion or timeout. No local tests were run.

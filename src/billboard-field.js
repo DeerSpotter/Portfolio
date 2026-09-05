@@ -26,7 +26,11 @@ export function createBillboardFieldRenderer({ hud, billboard, reducedMotion }) 
     const dt = Math.min(.05, Math.max(0, (now - lastTime) / 1000));
     lastTime = now;
     if (!reducedMotion) phaseTime += dt * (interactionHold ? .3 : 1 - timeFieldStrength * .55);
-    if (lastSeed !== seed) { system = createOrbitalSystem(seed); lastSeed = seed; }
+    if (lastSeed !== seed) {
+      system = createOrbitalSystem(seed); lastSeed = seed;
+      // Read the newly committed story layout in this frame, before drawing.
+      cardW = billboard.offsetWidth; cardH = billboard.offsetHeight;
+    }
     const compact = innerWidth <= 900;
     const pad = compact ? 26 : 190;
     const w = cardW + pad * 2, h = cardH + pad * 2;

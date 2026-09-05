@@ -45,8 +45,8 @@ if (controller.includes('nearest.distance <= LOCK_ACQUIRE_DISTANCE')) {
 if (ui.includes('showWaypoint(waypoints[0])')) {
   throw new Error('Waypoint 01 hard-reset returned; restored scroll positions would flash the wrong content.');
 }
-if (!ui.includes('window.__portfolioTimePocketDebug?.lockedStop')) {
-  throw new Error('UI does not honor the shared latched stop.');
+if (!ui.includes('const waypoint = requestedWaypoint;') || !billboard.includes('showWaypoint(stop)')) {
+  throw new Error('Billboard selection must own both the projected pose and the displayed content.');
 }
 if (!billboard.includes('window.__portfolioTimePocketDebug?.lockedStop')) {
   throw new Error('Billboard does not honor the shared latched stop.');

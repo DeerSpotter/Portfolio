@@ -42,9 +42,11 @@ function stopByTitle(title) {
   return title ? waypoints.find(stop => stop.title === title) || null : null;
 }
 
-function noteUserInput() {
+function noteUserInput(event) {
   const now = performance.now();
-  if (now < syntheticScrollUntil) return;
+  // Only ignore scroll events produced by our own coast. Physical input
+  // must interrupt immediately, even during that synthetic-scroll window.
+  if (event?.type === 'scroll' && now < syntheticScrollUntil) return;
   hasFlightInput = true;
   lastUserInputTime = now;
   coastCarry = 0;
@@ -147,6 +149,7 @@ function animate(now) {
     && stopAcquired
     && idleFor >= COAST_DELAY_MS
     && !document.body.classList.contains('reading-brief');
+  const readingHold = document.querySelector('.detail')?.dataset.readingHold === 'true';
   mode = canCoast ? 'time-pocket' : 'flight';
 
   if (mode !== lastDomMode) {
@@ -157,7 +160,10 @@ function animate(now) {
   const targetCoast = canCoast ? 1 : 0;
   coastStrength += (targetCoast - coastStrength) * (1 - Math.exp(-4.4 * dt));
 
-  if (canCoast) advanceCoast(dt, field.rate);
+  // Slow-pass presentation and forward travel are separate: a reading anchor
+  // keeps its location while retaining the time field and animated idle ship.
+  if (canCoast && !readingHold) advanceCoast(dt, field.rate);
+  else coastCarry = 0;
 
   window.__portfolioTimePocketDebug = {
     ready: true,
@@ -172,6 +178,8 @@ function animate(now) {
     lockedStopIndex: lockedStop ? waypoints.indexOf(lockedStop) : -1,
     relativeDistance: field.relativeDistance,
     coastRatePxPerSecond: field.rate,
+    readingHold,
+    advancing: canCoast && !readingHold,
     coastRateFar: COAST_RATE_FAR,
     coastRateNear: COAST_RATE_NEAR,
     timeFieldRadius: TIME_FIELD_RADIUS,

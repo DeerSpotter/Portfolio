@@ -1,5 +1,4 @@
 import { waypoints as stops } from './portfolio-content.js';
-import { showWaypoint } from './portfolio-ui.js';
 import { createDeepSpaceRenderer } from './procedural-cosmos.js';
 import { createAsteroidTraffic } from './asteroid-traffic.js';
 
@@ -931,11 +930,6 @@ function adaptPerformance(dt, now) {
   }
 }
 
-function updatePanel(progress) {
-  const current = activeStop || closestStop(progress).stop;
-  showWaypoint(current);
-}
-
 function animate(now) {
   const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
   lastTime = now;
@@ -970,7 +964,6 @@ function animate(now) {
   if (now % 100 < 17) {
     velocityEl.textContent = (Math.abs(velocity) * 100).toFixed(1);
     loopEl.textContent = `${loopCycle >= 0 ? '+' : ''}${loopCycle}`;
-    updatePanel(progress);
   }
 
   window.__portfolioCanvasDebug = {
