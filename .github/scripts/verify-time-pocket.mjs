@@ -12,7 +12,9 @@ for (const required of [
   'COAST_DELAY_MS = 170',
   'COAST_RATE_PX_PER_SECOND = 9',
   "mode = canCoast ? 'time-pocket' : 'flight'",
-  'scrollBy(0, Math.min(remaining, COAST_RATE_PX_PER_SECOND * dt))',
+  'coastCarry += COAST_RATE_PX_PER_SECOND * dt',
+  'syntheticScrollUntil = performance.now() + 90',
+  'scrollBy(0, distance)',
   'lockedStop?.title || null',
 ]) {
   if (!controller.includes(required)) throw new Error(`Time-pocket behavior missing: ${required}`);
