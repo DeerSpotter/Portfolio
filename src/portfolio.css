@@ -35,7 +35,7 @@ h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.375rem); line-height: 1.05; font-w
 .text-link:hover { color: var(--rust); }
 .telemetry { min-width: 115px; padding: 8px 10px; text-align: right; color: var(--muted); font: 700 .75rem/1.75 var(--mono); border-right: 1px solid var(--line); background: linear-gradient(90deg, transparent, rgba(255, 248, 227, .22)); }
 .telemetry strong { color: var(--ink); }
-.detail { position: relative; align-self: center; justify-self: end; width: min(420px, 36vw); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px; border: 1px solid var(--line); border-radius: 3px; background: var(--card); box-shadow: 0 14px 36px rgba(77, 53, 24, .12); transform: rotate(-.45deg); scrollbar-color: var(--rust) transparent; scrollbar-width: thin; }
+.detail { position: relative; align-self: center; justify-self: end; width: min(420px, 36vw); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px; border: 0; border-radius: 24px; background: transparent; transform: rotate(-.45deg); scrollbar-color: var(--rust) transparent; scrollbar-width: thin; }
 .detail-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; }
 .detail-heading .kicker { margin: 0; }
 .detail-rule { flex: 1; min-width: 16px; height: 1px; background: var(--line); }
