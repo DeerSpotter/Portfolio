@@ -63,6 +63,7 @@ let activeBankSide = 0;
 
 const BANK_DEADBAND = 0.035;
 const BANK_CENTER_EPSILON = 0.025;
+const REDUCED_MOTION_BANK_SCALE = 0.62;
 
 function wrap01(value) {
   return ((value % 1) + 1) % 1;
@@ -134,8 +135,13 @@ function animate(now) {
   route.getTangentAt(wrap01(progress + 0.008), curvatureProbe).normalize();
   const turnSignal = right.dot(curvatureProbe) * -1;
   const coastCalm = Math.max(0.18, 1 - coastAmount * 0.45 - timeFieldAmount * 0.36);
-  const targetRoll = reducedMotion ? 0 : THREE.MathUtils.clamp(
-    (turnSignal * 2.55 - filteredVelocity * 0.26) * coastCalm,
+  const bankMotionScale = reducedMotion ? REDUCED_MOTION_BANK_SCALE : 1;
+
+  // Roll is turn response only. Scroll speed can change thrust, but it cannot
+  // tell the ship which way to bank. As signed route curvature relaxes, the
+  // bank target naturally returns to level.
+  const targetRoll = THREE.MathUtils.clamp(
+    turnSignal * 2.55 * coastCalm * bankMotionScale,
     -0.82,
     0.82,
   );
@@ -146,7 +152,7 @@ function animate(now) {
   // the established flight response unchanged.
   const requestedBankSide = Math.abs(targetRoll) > BANK_DEADBAND ? Math.sign(targetRoll) : 0;
   let bankTargetRoll = targetRoll;
-  if (reducedMotion || requestedBankSide === 0) {
+  if (requestedBankSide === 0) {
     bankTargetRoll = 0;
     if (Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON) activeBankSide = 0;
   } else if (activeBankSide === 0) {
@@ -195,7 +201,7 @@ function animate(now) {
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-flight-centered-bank-v1',
+    motionContract: 'known-good-flight-centered-bank-v2',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -206,8 +212,10 @@ function animate(now) {
     bank: {
       activeSide: activeBankSide,
       requestedSide: requestedBankSide,
+      turnSignal,
       targetRoll,
       appliedTargetRoll: bankTargetRoll,
+      reducedMotionScale: bankMotionScale,
     },
     exhaust: 'turbulent-nozzle-rooted-shader-v1',
     engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
