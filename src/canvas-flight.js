@@ -72,6 +72,8 @@ let lastTravel = 0;
 let velocity = 0;
 let lastScrollY = scrollY;
 let recyclingScroll = false;
+let virtualTouchActive = false;
+let syncingVirtualTouch = false;
 let lastTime = performance.now();
 let lastMotionTime = performance.now();
 let activeStop = null;
@@ -145,10 +147,51 @@ function scrollMetrics() {
 }
 
 function updateTargetFromScroll() {
+  if (virtualTouchActive || syncingVirtualTouch) {
+    lastScrollY = scrollY;
+    return;
+  }
+
   const { local } = scrollMetrics();
   targetTravel = loopCycle + local;
   if (Math.abs(scrollY - lastScrollY) > 2) lastMotionTime = performance.now();
   lastScrollY = scrollY;
+}
+
+function beginVirtualTouchTravel() {
+  if (virtualTouchActive) return;
+  const { local } = scrollMetrics();
+  targetTravel = loopCycle + local;
+  virtualTouchActive = true;
+  lastMotionTime = performance.now();
+}
+
+function applyVirtualTouchDelta(deltaProgress) {
+  if (!virtualTouchActive) return;
+  const delta = Number(deltaProgress);
+  if (!Number.isFinite(delta) || delta === 0) return;
+  targetTravel += delta;
+  lastMotionTime = performance.now();
+}
+
+function finishVirtualTouchTravel() {
+  if (!virtualTouchActive) return;
+  virtualTouchActive = false;
+
+  const { maxScroll } = scrollMetrics();
+  loopCycle = Math.floor(targetTravel);
+  const wrapped = wrap01(targetTravel);
+  const syncY = clamp(wrapped * maxScroll, 0, maxScroll);
+
+  // The physical document is rebased only after the touch transaction ends.
+  // While the finger is down, all seam motion remains in logical flight space.
+  syncingVirtualTouch = true;
+  scrollTo(0, syncY);
+  lastScrollY = syncY;
+  requestAnimationFrame(() => {
+    syncingVirtualTouch = false;
+    lastScrollY = scrollY;
+  });
 }
 
 function recycleScroll(direction) {
@@ -187,6 +230,18 @@ addEventListener('portfolio-flight-loop-intent', event => {
   const direction = Math.sign(Number(event.detail?.direction));
   if (!direction) return;
   recycleScroll(direction);
+});
+addEventListener('portfolio-flight-virtual-touch', event => {
+  const phase = event.detail?.phase;
+  if (phase === 'begin') {
+    beginVirtualTouchTravel();
+    return;
+  }
+  if (phase === 'delta') {
+    applyVirtualTouchDelta(event.detail?.deltaProgress);
+    return;
+  }
+  if (phase === 'end' || phase === 'cancel') finishVirtualTouchTravel();
 });
 addEventListener('resize', resize, { passive: true });
 addEventListener('visibilitychange', () => {
@@ -943,6 +998,7 @@ function animate(now) {
   travel = damp(travel, targetTravel, reducedMotion ? 18 : 7.2, dt);
   velocity = (travel - lastTravel) / dt;
   lastTravel = travel;
+  if (virtualTouchActive) loopCycle = Math.floor(travel);
   const progress = wrap01(travel);
 
   if (Math.abs(velocity) > 0.0025) lastMotionTime = now;
@@ -998,7 +1054,8 @@ function animate(now) {
     ribbon: RIBBON_CONTRACT,
     ribbonStrands: 3,
     wakeMaxRadius: WAKE_MAX_RADIUS,
-    inputLoop: 'wheel-plus-semantic-touch-intent-v2',
+    virtualTouchActive,
+    inputLoop: 'wheel-plus-virtual-touch-v3',
   };
 
   requestAnimationFrame(animate);
