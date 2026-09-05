@@ -10,6 +10,8 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TAU = Math.PI * 2;
 const INTERACTION_HOLD_MS = 3500;
 const INTERACTION_FIELD_THRESHOLD = 0.72;
+const EXIT_START_REL = -0.006;
+const EXIT_END_REL = -0.065;
 const fieldRenderer = createBillboardFieldRenderer({ hud, billboard, reducedMotion });
 
 let displayed = null;
@@ -150,6 +152,14 @@ function chooseStop(progress, activeTitle) {
     if (active) return active;
   }
 
+  // Keep the currently visible pane alive through its full side-fade exit.
+  // Content changes only after the old pane is effectively transparent, so
+  // there is no abrupt disappearance at the reading-plane handoff.
+  if (displayed) {
+    const displayedRel = wrapSigned(displayed.at - progress);
+    if (displayedRel < EXIT_START_REL && displayedRel > EXIT_END_REL) return displayed;
+  }
+
   let best = null;
   let bestScore = Infinity;
   for (const stop of waypoints) {
@@ -174,7 +184,8 @@ function project(stop, progress, coastStrength) {
   const vp = vanishingPoint(progress);
   const side = billboardSide(stop);
   const t = clamp((0.20 - rel) / 0.255, 0, 1);
-  const pass = rel < 0 ? Math.pow(clamp(-rel / 0.055, 0, 1), 1.12) : 0;
+  const exitProgress = rel < 0 ? clamp(-rel / Math.abs(EXIT_END_REL), 0, 1) : 0;
+  const pass = Math.pow(exitProgress, 1.12);
 
   const lateralPerspective = 0.045 + Math.pow(t, 1.52) * 1.30;
   const forwardPerspective = 0.050 + Math.pow(t, 1.74) * 1.14;
@@ -198,7 +209,10 @@ function project(stop, progress, coastStrength) {
     scale *= 0.78;
     y -= innerHeight * 0.045;
   }
-  const alpha = clamp(0.10 + t * 1.18 - pass * 0.40, 0.07, 1);
+
+  const baseAlpha = clamp(0.10 + t * 1.18, 0.07, 1);
+  const smoothExit = pass * pass * (3 - 2 * pass);
+  const alpha = baseAlpha * (1 - smoothExit);
 
   const yaw = side * (-36 + t * 25 - pass * 20);
   const rollBase = side * (5.2 - t * 2.6 + pass * 5.8);
@@ -207,7 +221,7 @@ function project(stop, progress, coastStrength) {
   const skew = side * (-6.0 + t * 3.4);
 
   let state = 'distant';
-  if (rel < -0.006) state = 'passing';
+  if (rel < EXIT_START_REL) state = 'passing';
   else if (t >= 0.76) state = 'active';
   else if (t >= 0.61) state = 'arming';
   else if (t >= 0.34) state = 'approaching';
@@ -226,6 +240,7 @@ function project(stop, progress, coastStrength) {
     rel,
     side,
     pass,
+    exitProgress,
     state,
     interactive: (state === 'arming' || state === 'active') && rel > -0.045,
   };
@@ -392,6 +407,9 @@ function render(now = performance.now()) {
     x: screen.x,
     y: screen.y,
     scale: screen.scale,
+    alpha: projected.alpha,
+    pass: projected.pass,
+    exitProgress: projected.exitProgress,
     yaw: screen.yaw,
     roll: screen.roll,
     skew: screen.skew,
