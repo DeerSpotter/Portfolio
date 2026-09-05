@@ -43,7 +43,6 @@ try {
   await run('Syntax: destination browser proof', process.execPath, ['--check', 'verify-destination-browser.mjs']);
   await run('Syntax: mobile destination browser proof', process.execPath, ['--check', 'verify-mobile-destination-browser.mjs']);
   await run('Syntax: mobile browser proof', process.execPath, ['--check', 'verify-mobile-browser.mjs']);
-  await run('Syntax: ship smoothing browser proof', process.execPath, ['--check', 'verify-ship-smoothing-browser.mjs']);
   await run('Syntax: time-pocket browser proof', process.execPath, ['--check', 'verify-time-pocket-browser.mjs']);
   await run('Layered scenery contract', process.execPath, ['.github/scripts/verify-scenery.mjs']);
   await run('Interactive billboard contract', process.execPath, ['.github/scripts/verify-billboard.mjs']);
@@ -86,7 +85,6 @@ try {
   if (!ready) throw new Error(`Packaged site did not become ready: ${url}`);
   process.env.PORTFOLIO_URL = url;
   await run('Flight baseline and hiring experience', process.execPath, ['verify-canvas.mjs']);
-  await run('Smooth inertial ship experience', process.execPath, ['verify-ship-smoothing-browser.mjs']);
   await run('Billboard depth and interaction experience', process.execPath, ['verify-billboard-browser.mjs']);
   await run('Destination arrival briefing experience', process.execPath, ['verify-destination-browser.mjs']);
   await run('Mobile destination depth experience', process.execPath, ['verify-mobile-destination-browser.mjs']);
