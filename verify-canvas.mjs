@@ -125,10 +125,10 @@ for (let index = 0; index < expectedStops.length; index++) {
   const current = await page.locator(`[data-stop="${index}"]`).getAttribute('aria-current');
   if (current !== 'step') throw new Error(`Waypoint ${index + 1} navigation is not synchronized with the flight.`);
   await page.locator('#detailAction').click();
-  if (!await page.locator('#hiringBrief').evaluate(dialog => dialog.open)) throw new Error('The case-study action did not open the hiring brief.');
-  const section = await page.locator('#detailAction').getAttribute('data-open-brief');
-  if (!await page.locator(`[id="${section}"]`).evaluate(element => document.activeElement === element)) {
-    throw new Error(`The hiring brief did not focus its requested section: ${section}`);
+  if (!await page.locator('#destination').evaluate(dialog => dialog.open)) throw new Error('The billboard did not open its destination.');
+  const section = await page.locator('#detailAction').getAttribute('data-destination');
+  if (!await page.locator('#destinationTitle').evaluate(element => document.activeElement === element)) {
+    throw new Error(`The arrival did not focus its heading: ${section}`);
   }
   await page.keyboard.press('Escape');
   if (!await page.locator('#detailAction').evaluate(element => document.activeElement === element)) throw new Error('Closing the hiring brief lost keyboard focus.');
@@ -144,7 +144,7 @@ await page.mouse.wheel(0, -1000);
 await page.waitForTimeout(250);
 const readingEnd = await page.evaluate(() => ({ y: scrollY, cycle: window.__portfolioCanvasDebug.loopCycle }));
 if (readingStart.y !== readingEnd.y || readingStart.cycle !== readingEnd.cycle) throw new Error('Reading the brief changed the flight position.');
-await page.locator('.close-button').click();
+await page.locator('dialog[open] .close-button').click();
 
 // Text and all six controls must remain reachable on narrow and short screens.
 for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }, { width: 844, height: 390 }]) {
@@ -163,10 +163,10 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }
   await page.locator('[data-stop="3"]').click();
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.activeStop === 'ContextPort');
   await page.locator('#detailAction').click();
-  if (await page.locator('#hiringBrief').evaluate(dialog => dialog.scrollWidth > dialog.clientWidth + 1)) {
-    throw new Error(`Hiring brief overflows horizontally at ${viewport.width}x${viewport.height}.`);
+  if (await page.locator('#destination').evaluate(dialog => dialog.scrollWidth > dialog.clientWidth + 1)) {
+    throw new Error(`Destination overflows horizontally at ${viewport.width}x${viewport.height}.`);
   }
-  await page.locator('.close-button').click();
+  await page.locator('dialog[open] .close-button').click();
 }
 
 // Keep enlarged text and the directly shareable Deepgram entry usable.
@@ -174,7 +174,7 @@ await page.setViewportSize({ width: 720, height: 450 });
 await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
 await page.locator('.identity [data-open-brief]').click();
 if (await page.locator('#hiringBrief').evaluate(dialog => dialog.scrollWidth > dialog.clientWidth + 1)) throw new Error('Hiring brief overflows at 200% text size.');
-await page.locator('.close-button').click();
+await page.locator('dialog[open] .close-button').click();
 await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
 const deepgramUrl = new URL(url);
 deepgramUrl.searchParams.set('brief', 'deepgram');

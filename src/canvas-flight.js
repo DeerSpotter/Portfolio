@@ -1,6 +1,7 @@
 import { waypoints as stops } from './portfolio-content.js';
 import { showWaypoint } from './portfolio-ui.js';
 import { createDeepSpaceRenderer } from './procedural-cosmos.js';
+import { createAsteroidTraffic } from './asteroid-traffic.js';
 
 const canvas = document.getElementById('world');
 const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
@@ -15,6 +16,7 @@ const stars = [];
 const paperMarks = [];
 const trail = [];
 const deepSpace = createDeepSpaceRenderer();
+const asteroidTraffic = createAsteroidTraffic();
 
 const COLORS = {
   paper: '#e7d8b8',
@@ -959,6 +961,7 @@ function animate(now) {
   drawStars(progress, now);
   drawSceneCorridors(progress);
   drawWorldObjects(progress, now);
+  asteroidTraffic.render(ctx, cssW, cssH, dt, progress, reducedMotion, degraded);
   drawTrail(trail, COLORS.ink, 0.75, 0.09);
 
   const ribbonStop = activeStop || closestStop(progress).stop;

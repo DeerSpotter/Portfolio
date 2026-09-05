@@ -24,15 +24,15 @@ export function createFlameAtlas(makeCanvas = () => document.createElement('canv
       const u = across * 3 + Math.cos(phase) * 1.4;
       const v = rise * 7 + Math.sin(phase) * 1.4;
       const turbulence = noise(u, v) * .57 + noise(u * 2.1, v * 2.1) * .29 + noise(u * 4.3, v * 4.3) * .14;
-      const width = .56 * Math.pow(1 - rise, .72);
+      const width = .87 * Math.pow(1 - rise, .46);
       const curl = Math.sin(rise * 10 - phase * 2) * rise * .18 + (turbulence - .5) * rise * .6;
-      const density = Math.max(0, Math.min(1, (width - Math.abs(across + curl) + (turbulence - .5) * .28) * 5));
+      const density = Math.max(0, Math.min(1, (width - Math.abs(across + curl) + (turbulence - .5) * .24) * 7));
       const heat = Math.max(0, Math.min(1, density * (1 - rise * .75)));
       const offset = (y * atlas.width + frame * WIDTH + x) * 4;
       pixels.data[offset] = 255;
       pixels.data[offset + 1] = 60 + Math.round(heat * 193);
       pixels.data[offset + 2] = 12 + Math.round(heat ** 3 * 207);
-      pixels.data[offset + 3] = Math.round(density * Math.min(1, (1 - rise) * 5) * 210);
+      pixels.data[offset + 3] = Math.round(density * Math.min(1, (1 - rise) * 5) * 248);
     }
   }
   ctx.putImageData(pixels, 0, 0);

@@ -141,3 +141,21 @@ No new stubs, stock imagery, dependencies, or monkey patches are introduced.
 Reduced motion freezes ambient effects; narrow layouts use a compact orbital
 frame. Background bodies are cached and asteroid counts have a bounded degraded
 mode. The forward chase flight and parchment palette remain the baseline.
+
+## Destination arrivals and ambient travel
+
+Billboard actions now open only their own project content in a dedicated arrival
+scene: orbital reception, a Mars engineering colony, lunar archive, Saturn
+context exchange, runtime transfer dock, or Europa observatory. The explicit
+hiring-brief and Deepgram actions still open the full hiring brief. Destination
+content reuses the authoritative section with remapped IDs; other case studies
+are not filtered or hidden inside the arrival. Escape and Return to flight
+restore focus and retain the scroll location.
+
+`asteroid-traffic.js` maintains a fixed pool of irregular rocks and grey depth
+trails driven by elapsed time, independently of the document's travel position.
+`destination-scenes.js` renders each setting with its own geometry, palette,
+and approach motion. Reduced motion freezes ambient travel. Billboard flame
+flows are wider and denser; engine exhaust widens beyond the attached nozzle.
+
+No local tests were run for this change, as requested.

@@ -1,4 +1,5 @@
 import { waypoints } from './portfolio-content.js';
+import { openDestination } from './destination-ui.js';
 
 const brief = document.getElementById('hiringBrief');
 const navigation = [...document.querySelectorAll('[data-stop]')];
@@ -45,7 +46,7 @@ export function showWaypoint(requestedWaypoint) {
   displayed = index;
   for (const [key, element] of Object.entries(fields)) element.textContent = waypoint[key];
   action.textContent = `${waypoint.action} ↗`;
-  action.dataset.openBrief = waypoint.section;
+  action.dataset.destination = waypoint.section;
   document.getElementById('chapterName').textContent = waypoint.title;
   document.getElementById('waypointStatus').textContent = `Waypoint ${index + 1} of ${waypoints.length}: ${waypoint.title}`;
   document.querySelector('.detail').scrollTop = 0;
@@ -75,8 +76,26 @@ function openBrief(section, trigger) {
 }
 
 document.addEventListener('click', event => {
+  const destination = event.target.closest('[data-destination]');
+  if (destination) {
+    if (destination.getAttribute('aria-disabled') !== 'true') openDestination(destination.dataset.destination, destination);
+    return;
+  }
   const trigger = event.target.closest('[data-open-brief]');
   if (trigger) openBrief(trigger.dataset.openBrief, trigger);
+});
+
+const billboard = document.querySelector('.detail');
+billboard.addEventListener('click', event => {
+  if (event.target.closest('button, a') || billboard.dataset.interactive !== 'true') return;
+  openDestination(action.dataset.destination, billboard);
+});
+billboard.addEventListener('keydown', event => {
+  if (event.target !== billboard || billboard.dataset.interactive !== 'true') return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    openDestination(action.dataset.destination, billboard);
+  }
 });
 
 brief.addEventListener('close', () => {

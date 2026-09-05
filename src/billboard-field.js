@@ -28,7 +28,7 @@ export function createBillboardFieldRenderer({ hud, billboard, reducedMotion }) 
     if (!reducedMotion) phaseTime += dt * (interactionHold ? .3 : 1 - timeFieldStrength * .55);
     if (lastSeed !== seed) { system = createOrbitalSystem(seed); lastSeed = seed; }
     const compact = innerWidth <= 900;
-    const pad = compact ? 26 : 128;
+    const pad = compact ? 26 : 190;
     const w = cardW + pad * 2, h = cardH + pad * 2;
     const dpr = Math.min(devicePixelRatio || 1, 1.35);
     const key = `${w}:${h}:${dpr}`;
@@ -65,9 +65,9 @@ export function createBillboardFieldRenderer({ hud, billboard, reducedMotion }) 
         const angle = Math.atan2(Math.sin(a), Math.cos(a));
         const flicker = .85 + Math.sin(phaseTime * 7 + i * 2.7) * .15;
         drawTurbulentFlame(ctx, atlas, p.x, p.y, angle,
-          (front ? 27 : 37) * (.65 + strength * .35),
-          (front ? 36 : 68) * (.5 + strength * .5) * flicker,
-          phaseTime + i * .23, strength * (front ? .62 : .82));
+          (front ? 62 : 90) * (.65 + strength * .35),
+          (front ? 66 : 118) * (.5 + strength * .5) * flicker,
+          phaseTime + i * .23, strength * (front ? .85 : 1));
         count++;
       }
       counts.push(count);
