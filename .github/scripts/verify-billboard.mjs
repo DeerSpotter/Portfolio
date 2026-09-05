@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync('index.html', 'utf8');
 const css = readFileSync('src/billboard.css', 'utf8');
 const js = readFileSync('src/billboard-flight.js', 'utf8');
+const smoke = readFileSync('src/billboard-smoke.js', 'utf8');
 
 for (const required of [
   './src/billboard.css',
@@ -39,32 +40,34 @@ for (const behavior of [
 }
 
 for (const smokeBehavior of [
-  "SMOKE_CONTRACT = 'charcoal-grey-billboard-smoke-v1'",
-  'SMOKE_PLUME_COUNT = 7',
-  "smokeField.className = 'billboard-smoke-field'",
-  "smokeField.setAttribute('aria-hidden', 'true')",
-  "plume.className = `billboard-smoke-plume plume-${index + 1}`",
-  'function smokeFor(',
-  'function renderSmoke(',
-  'smokeStrength: smoke.strength',
-  'smokePlumeCount: SMOKE_PLUME_COUNT',
-  'smokeContract: SMOKE_CONTRACT',
-  '.billboard-smoke-field',
-  '.billboard-smoke-plume',
-  'mix-blend-mode: multiply',
-  'smoke-core-flame',
-  'smoke-flame-a',
-  'smoke-flame-b',
-  'smoke-flame-c',
-  "data-smoke-state='active'",
-  "data-smoke-state='passing'",
-  '@media (prefers-reduced-motion: reduce)',
+  "import { createBillboardSmokeRenderer } from './billboard-smoke.js'",
+  'createBillboardSmokeRenderer({ hud, billboard, reducedMotion })',
+  "SMOKE_CONTRACT = 'canvas2d-charcoal-wisp-smoke-v2'",
+  "canvas.className = 'billboard-smoke-canvas'",
+  "canvas.setAttribute('aria-hidden', 'true')",
+  "pointerEvents: 'none'",
+  "mixBlendMode: 'multiply'",
+  'MAX_PARTICLES = 64',
+  'function spawn(',
+  'function updateParticle(',
+  'function drawWisp(',
+  'ctx.quadraticCurveTo',
+  'createLinearGradient',
+  'stateStrength(',
+  'emissionRate(',
+  'interactionHold ? 0.34',
+  "renderer: 'canvas-2d-particle-wisps'",
+  'smokeParticleCount: smoke.particleCount',
+  'smokeContract: smoke.contract',
 ]) {
-  if (!js.includes(smokeBehavior) && !css.includes(smokeBehavior)) {
-    throw new Error(`Charcoal billboard smoke contract missing: ${smokeBehavior}`);
+  if (!js.includes(smokeBehavior) && !smoke.includes(smokeBehavior)) {
+    throw new Error(`JavaScript charcoal smoke contract missing: ${smokeBehavior}`);
   }
 }
 
+if (js.includes("smokeField.className = 'billboard-smoke-field'") || js.includes('SMOKE_PLUME_COUNT')) {
+  throw new Error('The old CSS plume smoke renderer is still active in billboard-flight.js.');
+}
 if (!js.includes('return -artSide * 0.46')) {
   throw new Error('Billboard must remain opposite the section artwork.');
 }
@@ -80,12 +83,6 @@ if (!js.includes("pocket?.mode === 'time-pocket'")) {
 if (!js.includes('interactionHoldConsumedStop !== stop.title')) {
   throw new Error('Interaction hold must be one-shot per pass rather than repeatedly snapping back.');
 }
-if (!css.includes('pointer-events: none;')) {
-  throw new Error('Smoke atmosphere must never intercept billboard clicks.');
-}
-if (!css.includes('z-index: 1;') || !css.includes('z-index: 2;')) {
-  throw new Error('Smoke must remain behind the readable billboard.');
-}
 
 console.log('[portfolio-billboard] PASS');
 console.log('[portfolio-billboard] path=distant->approaching->arming->active->passing');
@@ -93,5 +90,5 @@ console.log('[portfolio-billboard] perspective=flight-direction-skew');
 console.log('[portfolio-billboard] interaction=near-range-plus-slow-pass');
 console.log('[portfolio-billboard] hold=3500ms-one-shot-camera-relative-click-window');
 console.log('[portfolio-billboard] focus=shared-latched-stop');
-console.log('[portfolio-billboard] smoke=7-plume-charcoal-grey-world-space-atmosphere');
+console.log('[portfolio-billboard] smoke=canvas2d-directional-charcoal-wisps');
 console.log('[portfolio-billboard] smokeInteraction=behind-card-pointer-events-none');
