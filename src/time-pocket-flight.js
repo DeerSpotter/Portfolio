@@ -16,6 +16,7 @@ let lockedStop = null;
 let mode = 'flight';
 let lastDomMode = '';
 let coastStrength = 0;
+let hasFlightInput = false;
 
 function wrap01(value) {
   return ((value % 1) + 1) % 1;
@@ -46,6 +47,7 @@ function nearestStop(progress) {
 function noteUserInput() {
   const now = performance.now();
   if (now < syntheticScrollUntil) return;
+  hasFlightInput = true;
   lastUserInputTime = now;
   coastCarry = 0;
   mode = 'flight';
@@ -113,7 +115,10 @@ function animate(now) {
   updateLock(flight.progress);
   const field = fieldFor(flight.progress);
   const idleFor = now - lastUserInputTime;
-  const canCoast = !reducedMotion && idleFor >= COAST_DELAY_MS && !document.body.classList.contains('reading-brief');
+  const canCoast = hasFlightInput
+    && !reducedMotion
+    && idleFor >= COAST_DELAY_MS
+    && !document.body.classList.contains('reading-brief');
   mode = canCoast ? 'time-pocket' : 'flight';
 
   if (mode !== lastDomMode) {
@@ -129,6 +134,7 @@ function animate(now) {
   window.__portfolioTimePocketDebug = {
     ready: true,
     mode,
+    hasFlightInput,
     coastStrength,
     timeFieldStrength: field.strength,
     lockedStop: lockedStop?.title || null,
