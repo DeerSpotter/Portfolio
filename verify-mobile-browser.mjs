@@ -11,6 +11,8 @@ function numericPx(value) {
 async function inspectHud() {
   return page.evaluate(() => {
     const detail = document.querySelector('.detail');
+    const detailRect = detail.getBoundingClientRect();
+    const footerRect = document.querySelector('.hud-bottom').getBoundingClientRect();
     const h1 = document.querySelector('h1');
     const subtitle = document.querySelector('.subtitle');
     const buttons = [...document.querySelectorAll('.waypoint-nav button')];
@@ -28,6 +30,8 @@ async function inspectHud() {
       detailPosition: getComputedStyle(detail).position,
       detailWidth: detail.offsetWidth,
       detailTransform: getComputedStyle(detail).transform,
+      cardBottom: detailRect.bottom,
+      navigationTop: footerRect.top,
       navCount: buttons.length,
       navHeights: buttons.map(button => button.getBoundingClientRect().height),
       hiddenWaypoints: buttons.filter(button => !visible(button)).length,
@@ -53,6 +57,9 @@ function assertCompactHud(sample, label, limits) {
   }
   if (sample.hiddenTopActions !== 0 || !sample.chapterVisible || !sample.subtitleVisible) {
     throw new Error(`${label}: mobile compacting suppressed content: topActions=${sample.hiddenTopActions}, chapter=${sample.chapterVisible}, subtitle=${sample.subtitleVisible}`);
+  }
+  if (sample.cardBottom > sample.navigationTop + 1) {
+    throw new Error(`${label}: flying card overlaps waypoint HUD: card bottom=${sample.cardBottom}, navigation top=${sample.navigationTop}`);
   }
   if (sample.overflow) throw new Error(`${label}: compact HUD creates horizontal page overflow.`);
   if (numericPx(sample.h1Font) > limits.h1 || numericPx(sample.subtitleFont) > limits.subtitle) {
@@ -119,11 +126,15 @@ try {
   await page.waitForTimeout(250);
   const landscape = await inspectHud();
   assertCompactHud(landscape, '844x390 landscape', { h1: 18, subtitle: 9, detailWidth: 192, navHeight: 26 });
+  if (!(landscape.billboard.scale < narrow.billboard.scale * 0.9)) {
+    throw new Error(`Landscape resize reused a stale portrait pose: portrait scale=${narrow.billboard.scale}, landscape scale=${landscape.billboard.scale}`);
+  }
 
   console.log('[portfolio-mobile] PASS');
   console.log('[portfolio-mobile] layout=compact-game-hud');
   console.log('[portfolio-mobile] content=present-not-hidden');
   console.log('[portfolio-mobile] billboard=projected-with-aligned-field');
+  console.log('[portfolio-mobile] resize=reprojected-reading-pose');
   console.log('[portfolio-mobile] destination=compact-flight-corridor');
   console.log(`[portfolio-mobile] portrait=${portrait.viewport.width}x${portrait.viewport.height}, narrow=${narrow.viewport.width}x${narrow.viewport.height}, landscape=${landscape.viewport.width}x${landscape.viewport.height}`);
 } finally {
