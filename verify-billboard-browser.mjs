@@ -10,10 +10,10 @@ async function moveTo(progress) {
     scrollTo(0, max * p);
   }, progress);
   await page.waitForFunction(p => Math.abs(window.__portfolioCanvasDebug?.progress - p) < 0.0045, progress, { timeout: 5000 });
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(180);
   return page.evaluate(() => {
     const detail = document.querySelector('.detail');
-    const smoke = document.querySelector('.billboard-smoke-field');
+    const smoke = document.querySelector('.billboard-smoke-canvas');
     return {
       billboard: structuredClone(window.__portfolioBillboardDebug),
       state: detail?.dataset.billboardState,
@@ -22,12 +22,11 @@ async function moveTo(progress) {
       actionTabIndex: document.getElementById('detailAction')?.tabIndex,
       smoke: {
         exists: Boolean(smoke),
-        state: smoke?.dataset.smokeState,
-        plumeCount: document.querySelectorAll('.billboard-smoke-plume').length,
         pointerEvents: smoke ? getComputedStyle(smoke).pointerEvents : null,
-        opacity: smoke ? Number.parseFloat(getComputedStyle(smoke).opacity) : 0,
         zIndex: smoke ? Number.parseInt(getComputedStyle(smoke).zIndex, 10) : null,
         ariaHidden: smoke?.getAttribute('aria-hidden'),
+        width: smoke?.width || 0,
+        height: smoke?.height || 0,
       },
       detailZIndex: Number.parseInt(getComputedStyle(detail).zIndex, 10),
     };
@@ -38,8 +37,6 @@ try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready, null, { timeout: 15000 });
 
-  // Engineering sits at 0.18. After the first stop has passed, it should be
-  // acquired while still far away and then progress continuously toward us.
   const distant = await moveTo(0.055);
   const approaching = await moveTo(0.100);
   const arming = await moveTo(0.150);
@@ -57,9 +54,6 @@ try {
   samples.forEach((sample, index) => {
     if (sample.billboard.state !== expectedStates[index] || sample.state !== expectedStates[index]) {
       throw new Error(`Billboard state mismatch at stage ${index}: debug=${sample.billboard.state}, DOM=${sample.state}, expected=${expectedStates[index]}`);
-    }
-    if (sample.smoke.state !== expectedStates[index]) {
-      throw new Error(`Smoke did not follow billboard depth state at stage ${index}: smoke=${sample.smoke.state}, expected=${expectedStates[index]}`);
     }
   });
 
@@ -99,8 +93,8 @@ try {
     throw new Error(`Engineering billboard is not opposite its positive-side artwork: billboard side=${active.billboard.side}`);
   }
 
-  if (!active.smoke.exists || active.smoke.plumeCount !== 7 || active.smoke.ariaHidden !== 'true') {
-    throw new Error(`Smoke field is incomplete: exists=${active.smoke.exists}, plumes=${active.smoke.plumeCount}, ariaHidden=${active.smoke.ariaHidden}`);
+  if (!active.smoke.exists || active.smoke.ariaHidden !== 'true' || active.smoke.width <= 0 || active.smoke.height <= 0) {
+    throw new Error(`Smoke canvas is incomplete: exists=${active.smoke.exists}, ariaHidden=${active.smoke.ariaHidden}, size=${active.smoke.width}x${active.smoke.height}`);
   }
   if (active.smoke.pointerEvents !== 'none') {
     throw new Error(`Smoke atmosphere intercepts input: pointer-events=${active.smoke.pointerEvents}`);
@@ -119,11 +113,12 @@ try {
     && passing.billboard.smokeStrength > distant.billboard.smokeStrength)) {
     throw new Error(`Smoke did not thin naturally after pass: active=${active.billboard.smokeStrength}, passing=${passing.billboard.smokeStrength}, distant=${distant.billboard.smokeStrength}`);
   }
-  if (active.billboard.smokeContract !== 'charcoal-grey-billboard-smoke-v1' || active.billboard.smokePlumeCount !== 7) {
-    throw new Error(`Smoke debug contract mismatch: ${active.billboard.smokeContract}, plumes=${active.billboard.smokePlumeCount}`);
+  if (active.billboard.smokeContract !== 'canvas2d-charcoal-wisp-smoke-v2'
+    || active.billboard.smokeRenderer !== 'canvas-2d-particle-wisps') {
+    throw new Error(`Smoke debug contract mismatch: ${active.billboard.smokeContract}, renderer=${active.billboard.smokeRenderer}`);
   }
-  if (!(active.smoke.opacity > approaching.smoke.opacity && approaching.smoke.opacity > distant.smoke.opacity)) {
-    throw new Error(`Rendered smoke opacity did not build toward active range: ${distant.smoke.opacity.toFixed(3)} -> ${approaching.smoke.opacity.toFixed(3)} -> ${active.smoke.opacity.toFixed(3)}`);
+  if (!(active.billboard.smokeParticleCount > 0)) {
+    throw new Error(`Active JavaScript smoke emitted no particles: ${active.billboard.smokeParticleCount}`);
   }
 
   console.log('[portfolio-billboard-browser] PASS');
@@ -133,7 +128,8 @@ try {
   console.log(`[portfolio-billboard-browser] yaw=${distant.billboard.yaw.toFixed(1)}deg->${active.billboard.yaw.toFixed(1)}deg`);
   console.log('[portfolio-billboard-browser] interaction=near-range-only');
   console.log(`[portfolio-billboard-browser] smokeStrength=${smokeStrengths.map(value => value.toFixed(3)).join('->')}`);
-  console.log('[portfolio-billboard-browser] smoke=7-plume-charcoal-grey-behind-card');
+  console.log(`[portfolio-billboard-browser] smokeParticlesActive=${active.billboard.smokeParticleCount}`);
+  console.log('[portfolio-billboard-browser] smoke=canvas2d-directional-charcoal-wisps-behind-card');
 } finally {
   await browser.close();
 }
