@@ -13,12 +13,12 @@ const random = mulberry32(0x51a7f00d);
 const stars = [];
 const paperMarks = [];
 const trail = [];
-const trailGhost = [];
 
 const COLORS = {
   paper: '#e7d8b8',
   paperLight: '#f0e3c5',
   paperDeep: '#c9ad78',
+  paperShade: '#b99c68',
   ink: '#3b2f21',
   muted: '#8a765a',
   fox: '#cf6f2f',
@@ -29,19 +29,23 @@ const COLORS = {
   gold: '#a9792f',
 };
 
-const SCENERY_CONTRACT = 'layered-side-scenes-v1';
-const RIBBON_CONTRACT = 'scene-spanning-parallax-ribbons-v1';
+// Art direction: each stop is a single readable environmental composition.
+// Lead/trail layers are supporting silhouettes, never duplicate copies of the
+// hero scene. The ship passes between the hero station and the text billboard.
+const SCENERY_CONTRACT = 'art-directed-flight-stations-v2';
+const RIBBON_CONTRACT = 'perspective-navigation-wake-v2';
+const WAKE_MAX_RADIUS = 0.072;
 const LAYER_OFFSETS = [
-  { delta: -0.033, depth: 0.78, sideScale: 0.90, liftDelta: -0.055, detail: 0.56, role: 'lead' },
+  { delta: -0.048, depth: 0.70, sideScale: 0.86, liftDelta: -0.035, detail: 0.34, role: 'lead' },
   { delta: 0.000, depth: 1.00, sideScale: 1.00, liftDelta: 0.000, detail: 1.00, role: 'hero' },
-  { delta: 0.031, depth: 1.12, sideScale: 1.07, liftDelta: 0.065, detail: 0.72, role: 'trail' },
+  { delta: 0.044, depth: 1.16, sideScale: 1.06, liftDelta: 0.055, detail: 0.38, role: 'trail' },
 ];
 
 const scenery = stops.flatMap((stop, stopIndex) => LAYER_OFFSETS.map((layer, layerIndex) => ({
   ...stop,
   at: wrap01(stop.at + layer.delta),
-  side: clamp(stop.side * layer.sideScale, -0.86, 0.86),
-  lift: clamp(stop.lift + layer.liftDelta, -0.30, 0.30),
+  side: clamp(stop.side * layer.sideScale, -0.84, 0.84),
+  lift: clamp(stop.lift + layer.liftDelta, -0.28, 0.28),
   depth: layer.depth,
   detail: layer.detail,
   role: layer.role,
@@ -108,14 +112,14 @@ function resize() {
 function rebuildBackdrop() {
   stars.length = 0;
   paperMarks.length = 0;
-  const starCount = degraded ? 70 : 140;
-  const markCount = degraded ? 30 : 68;
+  const starCount = degraded ? 56 : 110;
+  const markCount = degraded ? 24 : 48;
 
   for (let i = 0; i < starCount; i++) {
     stars.push({
       x: random(),
       y: random(),
-      size: 0.4 + random() * 1.4,
+      size: 0.4 + random() * 1.3,
       layer: 0.12 + random() * 0.88,
       phase: random() * TAU,
     });
@@ -125,9 +129,9 @@ function rebuildBackdrop() {
     paperMarks.push({
       x: random(),
       y: random(),
-      len: 5 + random() * 24,
+      len: 4 + random() * 19,
       tilt: (random() - 0.5) * 0.5,
-      alpha: 0.025 + random() * 0.045,
+      alpha: 0.018 + random() * 0.032,
     });
   }
 }
@@ -199,35 +203,35 @@ function shipPoint(progress) {
   };
 }
 
-// Perspective is intentionally asymmetrical. Side scenery grows outward faster
-// than it grows vertically, so it feels like the ship is overtaking a layered
-// environment rather than scrolling past flat cards.
+// Screen-space perspective is still deliberately wider than it is tall, but
+// the near scale is capped so a station can feel monumental without becoming
+// an accidental cropped wall of linework.
 function projectObject(obj, progress, depthScale = 1) {
   const rel = wrapSigned(obj.at - progress);
-  if (rel < -0.078 || rel > 0.425) return null;
+  if (rel < -0.078 || rel > 0.39) return null;
 
   const vp = vanishingPoint(progress);
-  const t = clamp((0.425 - rel) / 0.503, 0, 1);
-  const forwardScale = 0.055 + Math.pow(t, 1.68) * 1.72 * depthScale;
-  const lateralScale = 0.10 + Math.pow(t, 1.48) * 1.72 * depthScale;
+  const t = clamp((0.39 - rel) / 0.468, 0, 1);
+  const forwardScale = 0.050 + Math.pow(t, 1.68) * 1.42 * depthScale;
+  const lateralScale = 0.075 + Math.pow(t, 1.48) * 1.46 * depthScale;
   const side = obj.side || 0;
   const lift = obj.lift || 0;
-  const laneX = cssW * (0.50 + side * 0.49);
-  const laneY = cssH * (0.49 + lift * 0.50);
-  const passKick = rel < 0 ? Math.pow(clamp(-rel / 0.078, 0, 1), 1.16) : 0;
+  const laneX = cssW * (0.50 + side * 0.45);
+  const laneY = cssH * (0.48 + lift * 0.45);
+  const passKick = rel < 0 ? Math.pow(clamp(-rel / 0.078, 0, 1), 1.18) : 0;
 
   const x = vp.x
     + (laneX - vp.x) * lateralScale
-    + side * cssW * 0.42 * passKick;
+    + side * cssW * 0.34 * passKick;
   const y = vp.y
     + (laneY - vp.y) * forwardScale
-    + cssH * 0.21 * passKick;
+    + cssH * 0.18 * passKick;
 
-  const scaleY = 0.08 + Math.pow(t, 1.58) * 1.64 * depthScale;
-  const scaleX = scaleY * (0.82 + t * 0.58 + passKick * 0.34);
-  const alpha = clamp(t * 3.0, 0.08, 1)
-    * clamp((0.46 - rel) * 6.5, 0.18, 1);
-  const rotation = -side * (0.035 + t * 0.075);
+  const scaleY = 0.060 + Math.pow(t, 1.54) * 1.36 * depthScale;
+  const scaleX = scaleY * (0.90 + t * 0.34 + passKick * 0.18);
+  const alpha = clamp(t * 2.8, 0.06, 1)
+    * clamp((0.42 - rel) * 6.0, 0.14, 1);
+  const rotation = -side * (0.025 + t * 0.055);
 
   return { x, y, scaleX, scaleY, alpha, rel, t, passKick, rotation };
 }
@@ -241,16 +245,9 @@ function clearBackground(progress) {
   ctx.fillRect(0, 0, cssW, cssH);
 
   const vp = vanishingPoint(progress);
-  const wash = ctx.createRadialGradient(
-    vp.x,
-    vp.y,
-    0,
-    vp.x,
-    vp.y,
-    Math.max(cssW, cssH) * 0.62,
-  );
-  wash.addColorStop(0, 'rgba(255,248,225,.76)');
-  wash.addColorStop(0.44, 'rgba(207,111,47,.052)');
+  const wash = ctx.createRadialGradient(vp.x, vp.y, 0, vp.x, vp.y, Math.max(cssW, cssH) * 0.62);
+  wash.addColorStop(0, 'rgba(255,248,225,.78)');
+  wash.addColorStop(0.40, 'rgba(207,111,47,.045)');
   wash.addColorStop(1, 'rgba(120,88,45,0)');
   ctx.fillStyle = wash;
   ctx.fillRect(0, 0, cssW, cssH);
@@ -264,10 +261,7 @@ function clearBackground(progress) {
     const x = mark.x * cssW;
     const y = mark.y * cssH;
     ctx.moveTo(x, y);
-    ctx.lineTo(
-      x + Math.cos(mark.tilt) * mark.len,
-      y + Math.sin(mark.tilt) * mark.len,
-    );
+    ctx.lineTo(x + Math.cos(mark.tilt) * mark.len, y + Math.sin(mark.tilt) * mark.len);
     ctx.stroke();
   }
   ctx.restore();
@@ -275,23 +269,25 @@ function clearBackground(progress) {
 
 function drawPerspectiveGuide(progress) {
   const vp = vanishingPoint(progress);
-
   ctx.save();
+  ctx.strokeStyle = 'rgba(86,68,44,.060)';
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(86,68,44,.075)';
 
-  for (const edge of [-0.47, -0.25, 0.25, 0.47]) {
+  for (const edge of [-0.42, -0.20, 0.20, 0.42]) {
     ctx.beginPath();
     ctx.moveTo(vp.x, vp.y);
-    ctx.lineTo(cssW * (0.5 + edge), cssH * 1.03);
+    ctx.lineTo(cssW * (0.5 + edge), cssH * 1.02);
     ctx.stroke();
   }
 
-  ctx.globalAlpha = 0.055;
   for (let i = 1; i <= 5; i++) {
-    const y = vp.y + (cssH - vp.y) * Math.pow(i / 5, 1.72);
+    const t = i / 5;
+    const y = vp.y + (cssH - vp.y) * Math.pow(t, 1.68);
+    const half = cssW * 0.42 * Math.pow(t, 1.45);
+    ctx.globalAlpha = 0.30 + t * 0.32;
     ctx.beginPath();
-    ctx.ellipse(vp.x, y, cssW * 0.10 * i, cssH * 0.018 * i, 0, 0, TAU);
+    ctx.moveTo(vp.x - half, y);
+    ctx.lineTo(vp.x + half, y);
     ctx.stroke();
   }
 
@@ -309,23 +305,20 @@ function drawStars(progress, now) {
     const spread = Math.pow(depth, 1.7);
     const sx = vp.x + (star.x - 0.5) * cssW * 1.10 * spread;
     const sy = vp.y + (star.y - 0.28) * cssH * 0.95 * spread;
-    const alpha = 0.10 + star.layer * 0.22
-      + Math.sin(now * 0.001 + star.phase) * 0.04;
+    const alpha = 0.07 + star.layer * 0.18 + Math.sin(now * 0.001 + star.phase) * 0.025;
 
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = COLORS.ink;
     ctx.lineWidth = star.size;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
-
     if (warp > 0.10) {
       const dx = sx - vp.x;
       const dy = sy - vp.y;
-      ctx.lineTo(sx + dx * 0.055 * warp, sy + dy * 0.055 * warp);
+      ctx.lineTo(sx + dx * 0.048 * warp, sy + dy * 0.048 * warp);
     } else {
       ctx.lineTo(sx + 0.1, sy + 0.1);
     }
-
     ctx.stroke();
   }
   ctx.restore();
@@ -350,14 +343,6 @@ function line(x1, y1, x2, y2, width = 1, color = COLORS.ink) {
   ctx.stroke();
 }
 
-function outlineRect(x, y, w, h, radius = 5, color = COLORS.ink, width = 1.6) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, radius);
-  ctx.stroke();
-}
-
 function fillRectSoft(x, y, w, h, fill, alpha = 1, radius = 5) {
   const previous = ctx.globalAlpha;
   ctx.globalAlpha *= alpha;
@@ -368,11 +353,66 @@ function fillRectSoft(x, y, w, h, fill, alpha = 1, radius = 5) {
   ctx.globalAlpha = previous;
 }
 
-function dot(x, y, r, fill = COLORS.ink) {
-  ctx.fillStyle = fill;
+function outlineRect(x, y, w, h, radius = 5, color = COLORS.ink, width = 1.4) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.stroke();
+}
+
+function polygon(points, fill, stroke = COLORS.ink, width = 1.2, alpha = 1) {
+  const previous = ctx.globalAlpha;
+  ctx.globalAlpha *= alpha;
+  ctx.beginPath();
+  points.forEach(([x, y], index) => {
+    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = previous;
+}
+
+function disc(x, y, r, fill, stroke = null, width = 1, alpha = 1) {
+  const previous = ctx.globalAlpha;
+  ctx.globalAlpha *= alpha;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, TAU);
-  ctx.fill();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = previous;
+}
+
+function ellipse(x, y, rx, ry, fill, stroke = null, width = 1, alpha = 1, rotation = 0) {
+  const previous = ctx.globalAlpha;
+  ctx.globalAlpha *= alpha;
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, rotation, 0, TAU);
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = previous;
 }
 
 function smallLabel(text, x, y, color = COLORS.ink, align = 'left') {
@@ -383,361 +423,322 @@ function smallLabel(text, x, y, color = COLORS.ink, align = 'left') {
   ctx.fillText(text, x, y);
 }
 
-function drawEntryVista(stop, detail) {
-  const c = stop.color;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  fillRectSoft(-74, -50, 148, 100, COLORS.paperLight, 0.58, 10);
-  outlineRect(-74, -50, 148, 100, 10, c, 1.7);
-
-  ctx.strokeStyle = c;
-  ctx.lineWidth = 2.4;
-  for (let i = 0; i < 3; i++) {
-    const x = -42 + i * 42;
-    ctx.beginPath();
-    ctx.moveTo(x - 12, 30);
-    ctx.lineTo(x, -28);
-    ctx.lineTo(x + 12, 30);
-    ctx.stroke();
-    dot(x, -28, 3.8, c);
-  }
-
-  ctx.globalAlpha *= 0.62;
-  line(-56, 9, 56, 9, 1.1, COLORS.ink);
-  line(-45, 20, 45, 20, 1.1, COLORS.ink);
-  ctx.globalAlpha /= 0.62;
-
-  if (detail > 0.7) {
-    ctx.strokeStyle = COLORS.fox;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-54, -10);
-    ctx.bezierCurveTo(-24, -24, 22, -18, 52, -2);
-    ctx.stroke();
-    smallLabel('BUILD → PROVE → EXPLAIN', 0, 40, COLORS.ink, 'center');
-  }
+function stationShadow(screen, stop) {
+  if (stop.role !== 'hero') return;
+  ctx.save();
+  ctx.globalAlpha = screen.alpha * 0.13;
+  ctx.fillStyle = stop.color;
+  ctx.beginPath();
+  ctx.ellipse(
+    screen.x + Math.sign(stop.side || 1) * 12 * screen.scaleX,
+    screen.y + 66 * screen.scaleY,
+    92 * screen.scaleX,
+    Math.max(7, 13 * screen.scaleY),
+    screen.rotation,
+    0,
+    TAU,
+  );
+  ctx.fill();
+  ctx.restore();
 }
 
-function drawEngineeringAssembly(stop, detail) {
+function drawEntryVista(stop) {
   const c = stop.color;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  polygon([[-82, 45], [-68, -26], [-49, -42], [-39, 45]], COLORS.paperDeep, COLORS.ink, 1.6);
+  polygon([[39, 45], [49, -42], [68, -26], [82, 45]], COLORS.paperDeep, COLORS.ink, 1.6);
+  fillRectSoft(-96, 42, 192, 13, COLORS.paperShade, 0.70, 4);
+  outlineRect(-96, 42, 192, 13, 4, COLORS.ink, 1.2);
 
-  fillRectSoft(-78, -55, 156, 110, COLORS.paperLight, 0.50, 7);
-  outlineRect(-78, -55, 156, 110, 7, COLORS.ink, 1.5);
-  line(-58, 43, -58, -42, 3.0, c);
-  line(58, 43, 58, -42, 3.0, c);
-  line(-58, -42, 58, -42, 3.0, c);
-  line(-58, 30, 58, 30, 1.1, COLORS.ink);
-
-  fillRectSoft(-38, -20, 56, 34, COLORS.paperDeep, 0.52, 3);
-  outlineRect(-38, -20, 56, 34, 3, COLORS.ink, 1.4);
-  for (const [x, y] of [[-28, -11], [8, -11], [-28, 5], [8, 5]]) {
-    ctx.strokeStyle = c;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(x, y, 3.2, 0, TAU);
-    ctx.stroke();
-  }
-
-  ctx.strokeStyle = COLORS.ink;
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(0, 3, 60, Math.PI * 1.08, Math.PI * 1.92);
+  ctx.stroke();
   ctx.lineWidth = 1.5;
+  ctx.globalAlpha *= 0.48;
   ctx.beginPath();
-  ctx.ellipse(41, -5, 13, 18, 0, 0, TAU);
+  ctx.arc(0, 3, 48, Math.PI * 1.08, Math.PI * 1.92);
   ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(41, -5, 5, 18, 0, 0, TAU);
-  ctx.stroke();
+  ctx.globalAlpha /= 0.48;
 
-  if (detail > 0.62) {
-    ctx.save();
-    ctx.translate(-55, 2);
-    ctx.strokeStyle = c;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    for (let i = 0; i < 16; i++) {
-      const a = i / 16 * TAU;
-      const r = i % 2 ? 12 : 16;
-      const x = Math.cos(a) * r;
-      const y = Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, 5, 0, TAU);
-    ctx.stroke();
-    ctx.restore();
-
-    line(-42, -31, 20, -31, 1.0, COLORS.rust);
-    line(-42, -35, -42, -27, 1.0, COLORS.rust);
-    line(20, -35, 20, -27, 1.0, COLORS.rust);
-    smallLabel('NX / TC', 70, 43, c, 'right');
+  for (const x of [-42, 0, 42]) {
+    disc(x, 28, 5, c, COLORS.ink, 1.0);
+    line(x, 23, x * 0.18, -4, 1.1, COLORS.ink);
   }
+  smallLabel('BUILD', -58, 58, c, 'center');
+  smallLabel('PROVE', 0, 58, COLORS.ink, 'center');
+  smallLabel('EXPLAIN', 58, 58, c, 'center');
 }
 
-function drawAutomationStack(stop, detail) {
+function drawEngineeringAssembly(stop) {
   const c = stop.color;
-  ctx.lineJoin = 'round';
+  fillRectSoft(-96, -53, 192, 12, COLORS.paperShade, 0.80, 3);
+  fillRectSoft(-88, 38, 176, 10, COLORS.paperShade, 0.65, 3);
+  fillRectSoft(-87, -42, 10, 82, c, 0.78, 3);
+  fillRectSoft(77, -42, 10, 82, c, 0.78, 3);
 
-  for (let i = 3; i >= 0; i--) {
-    const ox = -58 + i * 7;
-    const oy = -43 + i * 7;
-    fillRectSoft(ox, oy, 92, 72, i === 0 ? COLORS.paperLight : COLORS.paperDeep, i === 0 ? 0.86 : 0.40, 4);
-    outlineRect(ox, oy, 92, 72, 4, COLORS.ink, 1.2);
-    line(ox + 69, oy, ox + 92, oy + 23, 1.0, c);
-  }
+  ellipse(-53, -1, 24, 30, COLORS.paperDeep, COLORS.ink, 1.5);
+  ellipse(-53, -1, 10, 15, COLORS.paperLight, c, 2.0);
+  fillRectSoft(-28, -22, 42, 44, COLORS.paperLight, 0.96, 5);
+  outlineRect(-28, -22, 42, 44, 5, COLORS.ink, 1.6);
+  for (const [x, y] of [[-20, -13], [6, -13], [-20, 13], [6, 13]]) disc(x, y, 2.6, c);
 
-  line(55, -36, 55, 38, 2.0, c);
-  const nodes = [
-    { y: -30, label: 'FIND' },
-    { y: -8, label: 'REV' },
-    { y: 14, label: 'CM' },
-    { y: 36, label: 'METRIC' },
+  fillRectSoft(24, -10, 35, 20, c, 0.76, 3);
+  outlineRect(24, -10, 35, 20, 3, COLORS.ink, 1.2);
+  ellipse(70, -1, 19, 29, COLORS.paperLight, COLORS.ink, 1.4);
+  ellipse(70, -1, 9, 20, null, c, 2.2);
+
+  line(-29, -33, 60, -33, 1.1, COLORS.rust);
+  line(-29, -38, -29, -28, 1.1, COLORS.rust);
+  line(60, -38, 60, -28, 1.1, COLORS.rust);
+  smallLabel('EXPLODED FIT', 16, -42, COLORS.rust, 'center');
+  smallLabel('NX / TC', 91, 55, c, 'right');
+}
+
+function drawAutomationStack(stop) {
+  const c = stop.color;
+  fillRectSoft(-92, 35, 184, 12, COLORS.paperShade, 0.72, 4);
+  for (const x of [-66, -20, 26, 72]) disc(x, 41, 5, COLORS.ink, null, 1, 0.52);
+
+  fillRectSoft(35, -48, 12, 82, c, 0.74, 4);
+  fillRectSoft(80, -48, 12, 82, c, 0.74, 4);
+  fillRectSoft(35, -48, 57, 10, COLORS.paperShade, 0.92, 4);
+  outlineRect(35, -48, 57, 82, 4, COLORS.ink, 1.2);
+
+  const sheets = [
+    { x: -76, y: 8, r: -0.12, a: 0.72 },
+    { x: -34, y: -4, r: -0.05, a: 0.90 },
+    { x: 4, y: 4, r: 0.04, a: 1.00 },
   ];
-  for (const node of nodes) {
-    dot(55, node.y, 4, c);
-    if (detail > 0.58) smallLabel(node.label, 66, node.y, COLORS.ink);
+  for (const sheet of sheets) {
+    ctx.save();
+    ctx.translate(sheet.x, sheet.y);
+    ctx.rotate(sheet.r);
+    fillRectSoft(-22, -28, 44, 56, COLORS.paperLight, sheet.a, 3);
+    outlineRect(-22, -28, 44, 56, 3, COLORS.ink, 1.2);
+    line(-14, -12, 14, -12, 1.0, c);
+    line(-14, -2, 10, -2, 0.8, COLORS.ink);
+    line(-14, 8, 14, 8, 0.8, COLORS.ink);
+    ctx.restore();
   }
 
-  ctx.globalAlpha *= 0.68;
-  line(-43, -24, 20, -24, 1.0, COLORS.ink);
-  line(-43, -10, 12, -10, 1.0, COLORS.ink);
-  line(-43, 4, 28, 4, 1.0, COLORS.ink);
-  line(-43, 18, 2, 18, 1.0, COLORS.ink);
-  ctx.globalAlpha /= 0.68;
-
-  if (detail > 0.7) {
-    fillRectSoft(-42, 31, 25, 12, c, 0.78, 2);
-    smallLabel('PDF', -29.5, 37, COLORS.paperLight, 'center');
-  }
-}
-
-function drawContextPort(stop, detail) {
-  const c = stop.color;
-
-  fillRectSoft(-82, -42, 56, 84, COLORS.paperLight, 0.62, 12);
-  fillRectSoft(26, -42, 56, 84, COLORS.paperLight, 0.62, 12);
-  outlineRect(-82, -42, 56, 84, 12, COLORS.ink, 1.5);
-  outlineRect(26, -42, 56, 84, 12, COLORS.ink, 1.5);
-
-  ctx.strokeStyle = c;
+  ctx.strokeStyle = COLORS.fox;
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.arc(0, 0, 19, 0, TAU);
+  ctx.moveTo(39, -12);
+  ctx.lineTo(88, -12);
   ctx.stroke();
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.arc(0, 0, 9, 0, TAU);
-  ctx.stroke();
-
-  ctx.strokeStyle = c;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-26, -10);
-  ctx.bezierCurveTo(-14, -10, -12, 0, -9, 0);
-  ctx.bezierCurveTo(4, 0, 10, 10, 26, 10);
-  ctx.stroke();
-
-  for (const x of [-58, 58]) {
-    for (let row = 0; row < 3; row++) {
-      fillRectSoft(x - 16, -23 + row * 20, 32, 10, row === 1 ? c : COLORS.paperDeep, row === 1 ? 0.72 : 0.48, 3);
-    }
-  }
-
-  if (detail > 0.64) {
-    smallLabel('A', -54, -32, c, 'center');
-    smallLabel('B', 54, -32, c, 'center');
-    smallLabel('MEMORY', 0, 31, COLORS.ink, 'center');
-    for (const p of [[-15, 0], [15, 7], [-4, -10]]) dot(p[0], p[1], 2.2, COLORS.fox);
-  }
+  disc(63.5, -12, 4, COLORS.paperLight, COLORS.fox, 2);
+  smallLabel('SCAN', 64, -58, c, 'center');
+  smallLabel('REV → CM → PDF', -26, 56, COLORS.ink, 'center');
 }
 
-function drawRuntimeBridge(stop, detail) {
+function drawContextPort(stop) {
   const c = stop.color;
+  polygon([[-96, 44], [-91, -38], [-68, -53], [-52, -38], [-48, 44]], COLORS.paperDeep, COLORS.ink, 1.5);
+  polygon([[48, 44], [52, -38], [68, -53], [91, -38], [96, 44]], COLORS.paperDeep, COLORS.ink, 1.5);
+  fillRectSoft(-103, 42, 206, 12, COLORS.paperShade, 0.66, 4);
 
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.arc(-67, -1, 24, 0, TAU);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(67, -1, 24, 0, TAU);
+  ctx.stroke();
+
+  ctx.lineWidth = 2.6;
+  ctx.beginPath();
+  ctx.moveTo(-43, -1);
+  ctx.bezierCurveTo(-22, -18, 22, 18, 43, -1);
+  ctx.stroke();
+  ctx.globalAlpha *= 0.38;
+  ctx.beginPath();
+  ctx.moveTo(-43, 9);
+  ctx.bezierCurveTo(-22, -8, 22, 28, 43, 9);
+  ctx.stroke();
+  ctx.globalAlpha /= 0.38;
+
+  for (const p of [[-22, -10], [0, 4], [25, 10]]) disc(p[0], p[1], 4, COLORS.fox, COLORS.ink, 0.7);
+  smallLabel('MEMORY', 0, -39, c, 'center');
+  smallLabel('A', -67, 34, COLORS.ink, 'center');
+  smallLabel('B', 67, 34, COLORS.ink, 'center');
+}
+
+function drawRuntimeBridge(stop) {
+  const c = stop.color;
   for (let i = 0; i < 4; i++) {
-    const y = 26 - i * 14;
-    fillRectSoft(-80, y, 92, 10, i === 0 ? c : COLORS.paperDeep, i === 0 ? 0.68 : 0.48, 2);
-    outlineRect(-80, y, 92, 10, 2, COLORS.ink, 1.0);
+    fillRectSoft(-98, 27 - i * 16, 72, 11, i === 0 ? c : COLORS.paperDeep, i === 0 ? 0.78 : 0.52, 3);
+    outlineRect(-98, 27 - i * 16, 72, 11, 3, COLORS.ink, 1.0);
+  }
+
+  fillRectSoft(38, -36, 56, 72, COLORS.paperDeep, 0.64, 5);
+  outlineRect(38, -36, 56, 72, 5, COLORS.ink, 1.3);
+  for (let i = 0; i < 3; i++) {
+    fillRectSoft(49, -24 + i * 22, 34, 12, i === 1 ? COLORS.fox : COLORS.paperLight, i === 1 ? 0.76 : 0.88, 2);
+    outlineRect(49, -24 + i * 22, 34, 12, 2, COLORS.ink, 0.9);
   }
 
   ctx.strokeStyle = c;
-  ctx.lineWidth = 3.2;
+  ctx.lineWidth = 7;
   ctx.beginPath();
-  ctx.moveTo(8, 24);
-  ctx.bezierCurveTo(24, -34, 56, -34, 76, 15);
+  ctx.moveTo(-24, 22);
+  ctx.bezierCurveTo(-8, -31, 20, -31, 40, 5);
   ctx.stroke();
-
   ctx.strokeStyle = COLORS.ink;
   ctx.lineWidth = 1.3;
   ctx.beginPath();
-  ctx.moveTo(18, 14);
-  ctx.bezierCurveTo(34, -20, 54, -18, 66, 9);
+  ctx.moveTo(-18, 18);
+  ctx.bezierCurveTo(-4, -20, 19, -20, 35, 8);
   ctx.stroke();
 
-  for (let i = 0; i < 3; i++) {
-    fillRectSoft(37 + i * 13, 19, 9, 22, i === 1 ? COLORS.fox : COLORS.paperLight, i === 1 ? 0.72 : 0.82, 2);
-    outlineRect(37 + i * 13, 19, 9, 22, 2, COLORS.ink, 1.0);
-  }
-
-  if (detail > 0.62) {
-    smallLabel('IMAGE', -79, -39, c);
-    smallLabel('READ', 28, -27, c);
-    smallLabel('ABI', 51, 47, COLORS.ink, 'center');
-    for (let i = 0; i < 5; i++) {
-      line(-70 + i * 15, -28, -70 + i * 15, -20, 1.0, COLORS.ink);
-    }
-  }
+  smallLabel('IMAGE', -98, -43, c);
+  smallLabel('DIRECT READ', 4, -35, c, 'center');
+  smallLabel('ABI', 66, 47, COLORS.ink, 'center');
 }
 
-function drawClarityMap(stop, detail) {
+function drawClarityMap(stop) {
   const c = stop.color;
+  ellipse(0, 2, 65, 42, COLORS.paperLight, COLORS.ink, 1.4, 0.72, -0.08);
+  ellipse(0, 2, 52, 33, null, c, 2.0, 0.86, -0.08);
+  ellipse(0, 2, 30, 19, null, COLORS.ink, 1.0, 0.48, -0.08);
 
-  fillRectSoft(-79, -50, 158, 100, COLORS.paperLight, 0.54, 7);
-  outlineRect(-79, -50, 158, 100, 7, COLORS.ink, 1.3);
-
-  ctx.globalAlpha *= 0.28;
-  for (let x = -60; x <= 60; x += 20) line(x, -38, x, 38, 0.8, COLORS.ink);
-  for (let y = -30; y <= 30; y += 15) line(-66, y, 66, y, 0.8, COLORS.ink);
-  ctx.globalAlpha /= 0.28;
-
-  ctx.strokeStyle = c;
-  ctx.lineWidth = 2.0;
-  ctx.beginPath();
-  ctx.arc(-20, 13, 26, 3.6, 6.0);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(14, 2, 31, 2.9, 5.3);
-  ctx.stroke();
-
-  const sources = [[-52, -24], [-43, 27], [44, -27], [55, 21]];
+  const sources = [[-77, -29], [-84, 27], [77, -26], [82, 31]];
   for (const [x, y] of sources) {
-    dot(x, y, 4, c);
-    line(x, y, 8, 4, 1.1, COLORS.ink);
+    disc(x, y, 5, c, COLORS.ink, 1.0);
+    line(x, y, 10, 3, 1.2, COLORS.ink);
   }
 
-  ctx.strokeStyle = COLORS.ink;
-  ctx.lineWidth = 1.7;
+  disc(10, 3, 8, COLORS.fox, COLORS.ink, 1.0);
+  ctx.strokeStyle = c;
+  ctx.lineWidth = 2.3;
   ctx.beginPath();
-  ctx.arc(8, 4, 13, 0, TAU);
+  ctx.arc(10, 3, 32, Math.PI * 1.10, Math.PI * 1.78);
   ctx.stroke();
-  dot(8, 4, 3.2, COLORS.fox);
-
-  if (detail > 0.65) {
-    smallLabel('SOURCE', -67, 42, c);
-    smallLabel('DECISION', 68, 42, COLORS.ink, 'right');
-    line(-8, -15, 27, -15, 1.0, COLORS.rust);
-    line(27, -15, 35, -7, 1.0, COLORS.rust);
-  }
+  ctx.beginPath();
+  ctx.arc(10, 3, 47, Math.PI * 1.10, Math.PI * 1.78);
+  ctx.stroke();
+  smallLabel('SOURCE', -84, 51, c);
+  smallLabel('DECISION', 84, 51, COLORS.ink, 'right');
 }
 
 function drawUnknownScene(stop) {
-  fillRectSoft(-60, -40, 120, 80, COLORS.paperLight, 0.55, 6);
-  outlineRect(-60, -40, 120, 80, 6, stop.color, 1.5);
-  line(-44, -12, 44, -12, 1.2, COLORS.ink);
-  line(-44, 6, 20, 6, 1.2, COLORS.ink);
+  fillRectSoft(-60, -28, 120, 56, COLORS.paperDeep, 0.60, 8);
+  outlineRect(-60, -28, 120, 56, 8, stop.color, 1.5);
+}
+
+function drawStationCompanion(stop) {
+  const c = stop.color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  switch (stop.visual) {
+    case 'entry-vista':
+      polygon([[-14, 36], [-8, -28], [0, -40], [8, -28], [14, 36]], COLORS.paperDeep, COLORS.ink, 1.2, 0.74);
+      disc(0, -40, 5, c, COLORS.ink, 0.8);
+      break;
+    case 'engineering-assembly':
+      ellipse(0, 0, 34, 34, COLORS.paperDeep, COLORS.ink, 1.4, 0.72);
+      ellipse(0, 0, 17, 17, COLORS.paperLight, c, 2.0, 0.92);
+      for (let i = 0; i < 8; i++) {
+        const a = i / 8 * TAU;
+        line(Math.cos(a) * 34, Math.sin(a) * 34, Math.cos(a) * 43, Math.sin(a) * 43, 3, c);
+      }
+      break;
+    case 'automation-stack':
+      fillRectSoft(-32, -40, 64, 80, COLORS.paperLight, 0.72, 5);
+      outlineRect(-32, -40, 64, 80, 5, COLORS.ink, 1.1);
+      line(-20, -18, 18, -18, 2.0, c);
+      line(-20, -2, 10, -2, 1.0, COLORS.ink);
+      line(-20, 14, 18, 14, 1.0, COLORS.ink);
+      break;
+    case 'context-port':
+      ellipse(0, 0, 34, 34, null, c, 6.0, 0.76);
+      ellipse(0, 0, 22, 22, null, COLORS.ink, 1.1, 0.56);
+      break;
+    case 'runtime-bridge':
+      fillRectSoft(-42, 18, 84, 11, c, 0.66, 3);
+      for (let i = 0; i < 3; i++) fillRectSoft(-38, 2 - i * 15, 76, 9, COLORS.paperDeep, 0.46, 2);
+      break;
+    case 'clarity-map':
+      ellipse(0, 0, 42, 25, null, c, 2.4, 0.64, -0.10);
+      disc(0, 0, 5, COLORS.fox, COLORS.ink, 0.8);
+      line(-51, 18, 0, 0, 1.0, COLORS.ink);
+      break;
+    default:
+      drawUnknownScene(stop);
+      break;
+  }
 }
 
 function drawSceneArtwork(stop, screen) {
+  stationShadow(screen, stop);
   sceneTransform(screen, () => {
-    const detail = stop.detail || 1;
+    if (stop.role !== 'hero') {
+      ctx.globalAlpha *= stop.role === 'lead' ? 0.54 : 0.42;
+      drawStationCompanion(stop);
+      return;
+    }
 
     switch (stop.visual) {
       case 'entry-vista':
-        drawEntryVista(stop, detail);
+        drawEntryVista(stop);
         break;
       case 'engineering-assembly':
-        drawEngineeringAssembly(stop, detail);
+        drawEngineeringAssembly(stop);
         break;
       case 'automation-stack':
-        drawAutomationStack(stop, detail);
+        drawAutomationStack(stop);
         break;
       case 'context-port':
-        drawContextPort(stop, detail);
+        drawContextPort(stop);
         break;
       case 'runtime-bridge':
-        drawRuntimeBridge(stop, detail);
+        drawRuntimeBridge(stop);
         break;
       case 'clarity-map':
-        drawClarityMap(stop, detail);
+        drawClarityMap(stop);
         break;
       default:
         drawUnknownScene(stop);
         break;
-    }
-
-    if (stop.role !== 'hero') {
-      ctx.globalAlpha *= 0.42;
-      ctx.strokeStyle = stop.color;
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      ctx.moveTo(-86, stop.role === 'lead' ? -58 : 58);
-      ctx.lineTo(86, stop.role === 'lead' ? -58 : 58);
-      ctx.stroke();
     }
   });
 }
 
 function drawSceneFocus(stop, screen, now) {
   if (!screen) return;
-
-  const pulse = reducedMotion ? 0 : Math.sin(now * 0.004) * 4;
-  const w = 116 * screen.scaleX + pulse;
-  const h = 82 * screen.scaleY + pulse * 0.5;
-
+  const pulse = reducedMotion ? 0 : (Math.sin(now * 0.003) + 1) * 0.5;
   ctx.save();
-  ctx.globalAlpha = 0.72;
+  ctx.globalAlpha = 0.18 + pulse * 0.10;
   ctx.strokeStyle = stop.color;
-  ctx.lineWidth = 2;
-
-  const corner = 14;
-  const left = screen.x - w;
-  const right = screen.x + w;
-  const top = screen.y - h;
-  const bottom = screen.y + h;
-
-  for (const [x, y, sx, sy] of [
-    [left, top, 1, 1],
-    [right, top, -1, 1],
-    [left, bottom, 1, -1],
-    [right, bottom, -1, -1],
-  ]) {
-    ctx.beginPath();
-    ctx.moveTo(x, y + sy * corner);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x + sx * corner, y);
-    ctx.stroke();
-  }
-
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.ellipse(screen.x, screen.y + 58 * screen.scaleY, 102 * screen.scaleX, 15 * screen.scaleY, screen.rotation, 0, TAU);
+  ctx.stroke();
   ctx.restore();
 }
 
 function drawSceneCorridors(progress) {
+  const upcoming = stops
+    .map(stop => ({ stop, rel: wrap01(stop.at - progress) }))
+    .filter(item => item.rel > 0.015 && item.rel < 0.32)
+    .sort((a, b) => a.rel - b.rel)[0];
+  if (!upcoming) return;
+
   const vp = vanishingPoint(progress);
+  const screen = projectObject(upcoming.stop, progress, 0.84);
+  if (!screen) return;
 
   ctx.save();
-  ctx.lineCap = 'round';
-
-  for (const stop of stops) {
-    const rel = wrapSigned(stop.at - progress);
-    if (rel < -0.03 || rel > 0.34) continue;
-
-    const screen = projectObject(stop, progress, 0.88);
-    if (!screen) continue;
-
-    ctx.globalAlpha = 0.09 + screen.t * 0.08;
-    ctx.strokeStyle = stop.color;
-    ctx.lineWidth = 1 + screen.t * 1.4;
-    ctx.setLineDash([6 + screen.t * 8, 9 + screen.t * 7]);
-    ctx.beginPath();
-    ctx.moveTo(vp.x, vp.y);
-    ctx.lineTo(screen.x, screen.y);
-    ctx.stroke();
-  }
-
-  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.07 + screen.t * 0.05;
+  ctx.strokeStyle = upcoming.stop.color;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(vp.x, vp.y);
+  ctx.quadraticCurveTo((vp.x + screen.x) * 0.5, vp.y + 18, screen.x, screen.y + 46 * screen.scaleY);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -755,9 +756,7 @@ function drawWorldObjects(progress, now) {
     return sa - sb;
   });
 
-  for (const item of projected) {
-    drawSceneArtwork(item.object, item.screen);
-  }
+  for (const item of projected) drawSceneArtwork(item.object, item.screen);
 
   if (activeStop) {
     const focus = projectObject(activeStop, progress, 1.0);
@@ -787,7 +786,6 @@ function nearestStop(progress) {
 
 function drawTrail(points, color, width, alpha) {
   if (points.length < 3) return;
-
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
@@ -796,135 +794,114 @@ function drawTrail(points, color, width, alpha) {
   ctx.lineJoin = 'round';
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
-
   for (let i = 1; i < points.length - 1; i++) {
     const mx = (points[i].x + points[i + 1].x) * 0.5;
     const my = (points[i].y + points[i + 1].y) * 0.5;
     ctx.quadraticCurveTo(points[i].x, points[i].y, mx, my);
   }
-
   ctx.stroke();
   ctx.restore();
 }
 
 function cubicPoint(a, b, c, d, t) {
   const mt = 1 - t;
-  return mt * mt * mt * a
-    + 3 * mt * mt * t * b
-    + 3 * mt * t * t * c
-    + t * t * t * d;
+  return mt * mt * mt * a + 3 * mt * mt * t * b + 3 * mt * t * t * c + t * t * t * d;
 }
 
-function drawHelicalRibbon(start, c1, c2, end, options) {
-  const {
-    phase,
-    turns,
-    radius,
-    verticalScale,
-    color,
-    width,
-    alpha,
-    direction,
-  } = options;
-  const steps = degraded ? 46 : 76;
+function cubicDerivative(a, b, c, d, t) {
+  const mt = 1 - t;
+  return 3 * mt * mt * (b - a) + 6 * mt * t * (c - b) + 3 * t * t * (d - c);
+}
 
+function wakePoint(start, c1, c2, end, t, phase, radius, turns) {
+  const cx = cubicPoint(start.x, c1.x, c2.x, end.x, t);
+  const cy = cubicPoint(start.y, c1.y, c2.y, end.y, t);
+  const dx = cubicDerivative(start.x, c1.x, c2.x, end.x, t);
+  const dy = cubicDerivative(start.y, c1.y, c2.y, end.y, t);
+  const length = Math.max(0.001, Math.hypot(dx, dy));
+  const nx = -dy / length;
+  const ny = dx / length;
+  const envelope = Math.sin(Math.PI * t) * (0.18 + t * 0.82);
+  const offset = Math.sin(phase + t * TAU * turns) * radius * envelope;
+  return { x: cx + nx * offset, y: cy + ny * offset };
+}
+
+function drawWakeStrand(start, c1, c2, end, options) {
+  const { phase, radius, turns, color, alpha, widthNear } = options;
+  const steps = degraded ? 44 : 70;
   ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.beginPath();
 
-  for (let i = 0; i <= steps; i++) {
+  let previous = wakePoint(start, c1, c2, end, 0, phase, radius, turns);
+  for (let i = 1; i <= steps; i++) {
     const t = i / steps;
-    const cx = cubicPoint(start.x, c1.x, c2.x, end.x, t);
-    const cy = cubicPoint(start.y, c1.y, c2.y, end.y, t);
-    const envelope = Math.sin(Math.PI * t);
-    const swell = radius * envelope * (0.42 + t * 0.92);
-    const angle = phase + direction * t * TAU * turns;
-    const x = cx + Math.cos(angle) * swell;
-    const y = cy + Math.sin(angle) * swell * verticalScale;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    const current = wakePoint(start, c1, c2, end, t, phase, radius, turns);
+    ctx.globalAlpha = alpha * (0.25 + t * 0.75);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.55 + widthNear * Math.pow(t, 1.65);
+    ctx.beginPath();
+    ctx.moveTo(previous.x, previous.y);
+    ctx.lineTo(current.x, current.y);
+    ctx.stroke();
+    previous = current;
   }
-
-  ctx.stroke();
   ctx.restore();
 }
 
 function drawFlightRibbons(stop, progress, now, emphasized) {
   if (!stop) return;
-
   const ship = shipPoint(progress);
   const vp = vanishingPoint(progress);
-  const art = projectObject(stop, progress, 1.02);
-  const billboardSide = -Math.sign(stop.side || 1) * 0.46;
-  const billboard = projectObject({ ...stop, side: billboardSide, lift: 0 }, progress, 0.90);
-  const intensity = emphasized ? 1 : 0.48;
-  const phase = reducedMotion ? 0 : now * 0.0019;
-  const artEnd = art || {
-    x: cssW * (0.5 + Math.sign(stop.side || 1) * 0.38),
-    y: cssH * 0.42,
-  };
-  const billboardEnd = billboard || {
-    x: cssW * (0.5 + billboardSide * 0.62),
-    y: cssH * 0.46,
-  };
+  const side = Math.sign(stop.side || 1);
+  const intensity = emphasized ? 1 : 0.60;
+  const radius = Math.min(cssW, cssH) * WAKE_MAX_RADIUS * (0.78 + intensity * 0.22);
+  const phase = reducedMotion ? 0 : now * 0.0021;
 
-  // Two large opposing strands make the flight path wrap between the artwork
-  // and the text billboard instead of curling harmlessly under the ship.
-  drawHelicalRibbon(
-    { x: ship.x - 16, y: ship.y + 20 },
-    { x: ship.x - cssW * 0.18, y: ship.y + cssH * 0.24 },
-    { x: vp.x + cssW * 0.30 * Math.sign(stop.side || 1), y: cssH * 0.17 },
-    artEnd,
-    {
-      phase,
-      turns: 2.9,
-      radius: Math.min(cssW, cssH) * 0.15,
-      verticalScale: 0.62,
-      color: stop.color,
-      width: 3.3 + intensity * 2.2,
-      alpha: 0.28 + intensity * 0.42,
-      direction: 1,
-    },
-  );
+  const start = { x: vp.x, y: vp.y + 6 };
+  const c1 = { x: vp.x + side * cssW * 0.035, y: vp.y + cssH * 0.12 };
+  const c2 = { x: ship.x - side * cssW * 0.055, y: ship.y - cssH * 0.19 };
+  const end = { x: ship.x, y: ship.y + 26 };
 
-  drawHelicalRibbon(
-    { x: ship.x + 16, y: ship.y + 18 },
-    { x: ship.x + cssW * 0.20, y: ship.y + cssH * 0.20 },
-    { x: vp.x - cssW * 0.34 * Math.sign(stop.side || 1), y: cssH * 0.15 },
-    billboardEnd,
-    {
-      phase: -phase * 0.82 + 1.4,
-      turns: 3.35,
-      radius: Math.min(cssW, cssH) * 0.18,
-      verticalScale: 0.58,
-      color: COLORS.fox,
-      width: 2.5 + intensity * 1.8,
-      alpha: 0.22 + intensity * 0.38,
-      direction: -1,
-    },
-  );
+  drawWakeStrand(start, c1, c2, end, {
+    phase,
+    radius,
+    turns: 2.65,
+    color: stop.color,
+    alpha: 0.24 + intensity * 0.20,
+    widthNear: 2.5 + intensity * 1.1,
+  });
+  drawWakeStrand(start, c1, c2, end, {
+    phase: phase + TAU / 3,
+    radius: radius * 0.86,
+    turns: 2.65,
+    color: COLORS.fox,
+    alpha: 0.18 + intensity * 0.16,
+    widthNear: 1.9 + intensity * 0.9,
+  });
+  drawWakeStrand(start, c1, c2, end, {
+    phase: phase + TAU * 2 / 3,
+    radius: radius * 0.68,
+    turns: 2.65,
+    color: COLORS.olive,
+    alpha: 0.11 + intensity * 0.11,
+    widthNear: 1.2 + intensity * 0.6,
+  });
 
-  // A thinner high arc crosses the scene and prevents the ribbon language from
-  // collapsing into a bottom-of-screen exhaust effect.
-  drawHelicalRibbon(
-    { x: vp.x, y: vp.y + 8 },
-    { x: cssW * 0.04, y: cssH * 0.10 },
-    { x: cssW * 0.96, y: cssH * 0.24 },
-    { x: ship.x, y: ship.y + 34 },
-    {
-      phase: phase * 0.62 + 2.2,
-      turns: 2.25,
-      radius: Math.min(cssW, cssH) * 0.11,
-      verticalScale: 0.72,
-      color: COLORS.olive,
-      width: 1.2 + intensity * 1.0,
-      alpha: 0.13 + intensity * 0.22,
-      direction: 1,
-    },
-  );
+  if (!degraded) {
+    ctx.save();
+    for (const t of [0.32, 0.50, 0.68]) {
+      const p = wakePoint(start, c1, c2, end, t, phase, radius * 0.48, 2.65);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.PI / 4);
+      ctx.globalAlpha = 0.18 + t * 0.18;
+      ctx.fillStyle = stop.color;
+      ctx.fillRect(-2.5, -2.5, 5, 5);
+      ctx.rotate(-Math.PI / 4);
+      ctx.translate(-p.x, -p.y);
+    }
+    ctx.restore();
+  }
 }
 
 function adaptPerformance(dt, now) {
@@ -971,21 +948,15 @@ function animate(now) {
   trailMode = activeStop ? 'orbit' : 'follow';
 
   const ship = shipPoint(progress);
-  trail.push({ x: ship.x, y: ship.y + 20 });
-  trailGhost.push({
-    x: ship.x + Math.sin(now * 0.0035) * 3.0,
-    y: ship.y + 27,
-  });
-  if (trail.length > 52) trail.shift();
-  if (trailGhost.length > 46) trailGhost.shift();
+  trail.push({ x: ship.x, y: ship.y + 23 });
+  if (trail.length > 40) trail.shift();
 
   clearBackground(progress);
   drawPerspectiveGuide(progress);
   drawStars(progress, now);
   drawSceneCorridors(progress);
   drawWorldObjects(progress, now);
-  drawTrail(trailGhost, COLORS.olive, 1.0, 0.16);
-  drawTrail(trail, COLORS.fox, 1.7, 0.38);
+  drawTrail(trail, COLORS.ink, 0.75, 0.09);
 
   const ribbonStop = activeStop || closestStop(progress).stop;
   drawFlightRibbons(ribbonStop, progress, now, Boolean(activeStop));
@@ -1018,8 +989,10 @@ function animate(now) {
     sceneryArtworkCount: scenery.length,
     sceneryHeroCount: stops.length,
     lateralPerspective: 'accelerated-side-growth',
+    artDirection: 'hero-station-plus-supporting-silhouettes',
     ribbon: RIBBON_CONTRACT,
     ribbonStrands: 3,
+    wakeMaxRadius: WAKE_MAX_RADIUS,
   };
 
   requestAnimationFrame(animate);
