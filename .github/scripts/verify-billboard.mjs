@@ -39,34 +39,42 @@ for (const behavior of [
   }
 }
 
-for (const smokeBehavior of [
+for (const flameBehavior of [
   "import { createBillboardSmokeRenderer } from './billboard-smoke.js'",
   'createBillboardSmokeRenderer({ hud, billboard, reducedMotion })',
-  "SMOKE_CONTRACT = 'canvas2d-charcoal-wisp-smoke-v2'",
-  "canvas.className = 'billboard-smoke-canvas'",
+  "FLAME_CONTRACT = 'canvas2d-industrial-edge-flame-v3'",
+  'MAX_REAR_PARTICLES = 58',
+  'MAX_FRONT_PARTICLES = 34',
+  'INDUSTRIAL_PALETTES',
+  "makeCanvas('billboard-flame-canvas billboard-flame-canvas-rear', 1)",
+  "makeCanvas('billboard-flame-canvas billboard-flame-canvas-front', 3)",
   "canvas.setAttribute('aria-hidden', 'true')",
   "pointerEvents: 'none'",
-  "mixBlendMode: 'multiply'",
-  'MAX_PARTICLES = 64',
-  'function spawn(',
-  'function updateParticle(',
-  'function drawWisp(',
+  'function frontEmissionRate(',
+  'function rearEmissionRate(',
+  'function drawFlameTongue(',
   'ctx.quadraticCurveTo',
   'createLinearGradient',
-  'stateStrength(',
-  'emissionRate(',
-  'interactionHold ? 0.34',
-  "renderer: 'canvas-2d-particle-wisps'",
-  'smokeParticleCount: smoke.particleCount',
+  'interactionHold ? 0.33',
+  "renderer: 'dual-canvas-2d-industrial-flames'",
+  'frontLayer: true',
+  'rearLayer: true',
+  'smokeFrontParticleCount: smoke.frontParticleCount',
+  'smokeRearParticleCount: smoke.rearParticleCount',
+  'smokeFrontLayer: smoke.frontLayer',
+  'smokeRearLayer: smoke.rearLayer',
   'smokeContract: smoke.contract',
 ]) {
-  if (!js.includes(smokeBehavior) && !smoke.includes(smokeBehavior)) {
-    throw new Error(`JavaScript charcoal smoke contract missing: ${smokeBehavior}`);
+  if (!js.includes(flameBehavior) && !smoke.includes(flameBehavior)) {
+    throw new Error(`Industrial billboard flame contract missing: ${flameBehavior}`);
   }
 }
 
 if (js.includes("smokeField.className = 'billboard-smoke-field'") || js.includes('SMOKE_PLUME_COUNT')) {
   throw new Error('The old CSS plume smoke renderer is still active in billboard-flight.js.');
+}
+if (smoke.includes("canvas.className = 'billboard-smoke-canvas'")) {
+  throw new Error('The old single behind-card smoke canvas is still active.');
 }
 if (!js.includes('return -artSide * 0.46')) {
   throw new Error('Billboard must remain opposite the section artwork.');
@@ -90,5 +98,6 @@ console.log('[portfolio-billboard] perspective=flight-direction-skew');
 console.log('[portfolio-billboard] interaction=near-range-plus-slow-pass');
 console.log('[portfolio-billboard] hold=3500ms-one-shot-camera-relative-click-window');
 console.log('[portfolio-billboard] focus=shared-latched-stop');
-console.log('[portfolio-billboard] smoke=canvas2d-directional-charcoal-wisps');
-console.log('[portfolio-billboard] smokeInteraction=behind-card-pointer-events-none');
+console.log('[portfolio-billboard] flame=dual-canvas-industrial-edge-tongues');
+console.log('[portfolio-billboard] flamePalette=charcoal-brown-olive-orange-rust');
+console.log('[portfolio-billboard] layering=rear-billboard-front-pointer-events-none');
