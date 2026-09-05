@@ -29,7 +29,7 @@ export function createEnginePlume(phase) {
         float n = noise(flow)*.58 + noise(flow*2.03)*.28 + noise(flow*4.01)*.14;
         float sway = (n-.5)*.23*z + sin(z*23.0-time*12.0)*.035*z;
         float radial = abs(vUv.x-.5+sway)*2.0;
-        float width = .66*pow(1.0-z,.6) + .08*sin(z*34.0-time*2.0)*z;
+        float width = (.48 + .4*smoothstep(0.0,.18,z))*pow(1.0-z,.42) + .08*sin(z*34.0-time*2.0)*z;
         float body = 1.0-smoothstep(width*.22, width, radial+(n-.5)*.18*z);
         float tail = (1.0-smoothstep(.52,1.0,z))*(.76+.24*n);
         float core = pow(max(0.0,1.0-radial*5.0),3.0)*(1.0-z);
@@ -38,13 +38,13 @@ export function createEnginePlume(phase) {
         vec3 hot = mix(vec3(.91,.23,.055),vec3(1.0,.72,.28),body);
         vec3 color = mix(cool,hot,smoothstep(.16,.8,z));
         color = mix(color,vec3(1.0,.97,.82),clamp(core+shock*.65,0.0,1.0));
-        gl_FragColor = vec4(color, body*tail*(.42+power*.3));
+        gl_FragColor = vec4(color, body*tail*(.66+power*.3));
       }
     `,
   });
-  const geometry = new THREE.PlaneGeometry(.66, 3.5, 1, 1);
+  const geometry = new THREE.PlaneGeometry(1.2, 4.8, 1, 1);
   geometry.rotateX(Math.PI / 2);
-  geometry.translate(0, 0, 1.75);
+  geometry.translate(0, 0, 2.4);
   for (let i = 0; i < 3; i++) {
     const slice = new THREE.Mesh(geometry, material);
     slice.rotation.z = i * Math.PI / 3;
