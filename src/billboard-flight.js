@@ -6,9 +6,13 @@ const billboard = document.querySelector('.detail');
 const action = document.getElementById('detailAction');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TAU = Math.PI * 2;
+const INTERACTION_HOLD_MS = 1800;
+const INTERACTION_FIELD_THRESHOLD = 0.72;
 
 let displayed = null;
 let lastState = '';
+let interactionHold = null;
+let interactionHoldUntil = 0;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -121,6 +125,55 @@ function project(stop, progress, coastStrength) {
   };
 }
 
+function captureInteractionHold(stop, screen, now) {
+  interactionHold = {
+    stopTitle: stop.title,
+    x: screen.x,
+    y: screen.y,
+    scale: screen.scale,
+    yaw: screen.yaw,
+    roll: screen.roll,
+    skew: screen.skew,
+  };
+  interactionHoldUntil = now + INTERACTION_HOLD_MS;
+}
+
+function heldScreen(stop, screen, pocket, timeFieldStrength, now) {
+  const shouldHold = !reducedMotion
+    && pocket?.mode === 'time-pocket'
+    && screen.state === 'active'
+    && screen.interactive
+    && timeFieldStrength >= INTERACTION_FIELD_THRESHOLD;
+
+  const focusInside = billboard.matches(':hover') || billboard.contains(document.activeElement);
+  if (focusInside && interactionHold?.stopTitle === stop.title) {
+    interactionHoldUntil = Math.max(interactionHoldUntil, now + 300);
+  }
+
+  if (!shouldHold) {
+    interactionHold = null;
+    interactionHoldUntil = 0;
+    return { screen, held: false };
+  }
+
+  if (!interactionHold || interactionHold.stopTitle !== stop.title || now >= interactionHoldUntil) {
+    captureInteractionHold(stop, screen, now);
+  }
+
+  return {
+    screen: {
+      ...screen,
+      x: interactionHold.x,
+      y: interactionHold.y,
+      scale: interactionHold.scale,
+      yaw: interactionHold.yaw,
+      roll: interactionHold.roll,
+      skew: interactionHold.skew,
+    },
+    held: true,
+  };
+}
+
 function updateAccessibility(interactive) {
   billboard.dataset.interactive = interactive ? 'true' : 'false';
   billboard.tabIndex = interactive ? 0 : -1;
@@ -128,7 +181,7 @@ function updateAccessibility(interactive) {
   action.setAttribute('aria-disabled', interactive ? 'false' : 'true');
 }
 
-function render() {
+function render(now = performance.now()) {
   const debug = window.__portfolioCanvasDebug;
   if (!debug?.ready) {
     requestAnimationFrame(render);
@@ -139,7 +192,9 @@ function render() {
   const coastStrength = reducedMotion ? 0 : (pocket?.coastStrength || 0);
   const timeFieldStrength = reducedMotion ? 0 : (pocket?.timeFieldStrength || 0);
   const stop = chooseStop(debug.progress, debug.activeStop);
-  const screen = project(stop, debug.progress, coastStrength);
+  const projected = project(stop, debug.progress, coastStrength);
+  const hold = heldScreen(stop, projected, pocket, timeFieldStrength, now);
+  const screen = hold.screen;
 
   if (stop !== displayed) {
     displayed = stop;
@@ -149,32 +204,35 @@ function render() {
   billboard.style.setProperty('--billboard-x', `${screen.x.toFixed(2)}px`);
   billboard.style.setProperty('--billboard-y', `${screen.y.toFixed(2)}px`);
   billboard.style.setProperty('--billboard-scale', screen.scale.toFixed(4));
-  billboard.style.setProperty('--billboard-alpha', screen.alpha.toFixed(4));
+  billboard.style.setProperty('--billboard-alpha', projected.alpha.toFixed(4));
   billboard.style.setProperty('--billboard-yaw', `${screen.yaw.toFixed(2)}deg`);
   billboard.style.setProperty('--billboard-roll', `${screen.roll.toFixed(2)}deg`);
   billboard.style.setProperty('--billboard-skew', `${screen.skew.toFixed(2)}deg`);
-  billboard.style.setProperty('--billboard-glow', clamp((screen.t - 0.48) / 0.42, 0, 1).toFixed(3));
+  billboard.style.setProperty('--billboard-glow', clamp((projected.t - 0.48) / 0.42, 0, 1).toFixed(3));
   billboard.style.setProperty('--billboard-color', stop.color);
-  billboard.style.setProperty('--billboard-side', screen.side.toFixed(3));
+  billboard.style.setProperty('--billboard-side', projected.side.toFixed(3));
   billboard.style.setProperty('--coast-strength', coastStrength.toFixed(3));
   billboard.style.setProperty('--time-field', timeFieldStrength.toFixed(3));
   billboard.dataset.timePocket = coastStrength > 0.45 ? 'true' : 'false';
+  billboard.dataset.interactionHold = hold.held ? 'true' : 'false';
 
-  if (screen.state !== lastState) {
-    lastState = screen.state;
-    billboard.dataset.billboardState = screen.state;
+  if (projected.state !== lastState) {
+    lastState = projected.state;
+    billboard.dataset.billboardState = projected.state;
   }
 
-  updateAccessibility(screen.interactive || reducedMotion);
+  updateAccessibility(projected.interactive || reducedMotion);
 
   window.__portfolioBillboardDebug = {
     ready: true,
     stop: stop.title,
-    state: screen.state,
-    interactive: screen.interactive || reducedMotion,
-    rel: screen.rel,
-    depth: screen.t,
-    side: screen.side,
+    state: projected.state,
+    interactive: projected.interactive || reducedMotion,
+    interactionHold: hold.held,
+    interactionHoldMs: INTERACTION_HOLD_MS,
+    rel: projected.rel,
+    depth: projected.t,
+    side: projected.side,
     x: screen.x,
     y: screen.y,
     scale: screen.scale,
@@ -183,7 +241,7 @@ function render() {
     skew: screen.skew,
     coastStrength,
     timeFieldStrength,
-    contract: 'approaching-skewed-interactive-billboard-v2',
+    contract: 'approaching-skewed-interactive-billboard-v3',
   };
 
   requestAnimationFrame(render);
