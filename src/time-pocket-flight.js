@@ -130,9 +130,11 @@ function animate(now) {
   const field = fieldFor(flight.progress);
   const idleFor = now - lastUserInputTime;
   const loopEdge = nearLoopEdge();
+  const stopAcquired = Boolean(flight.activeStop);
   const canCoast = hasFlightInput
     && !reducedMotion
     && !loopEdge
+    && stopAcquired
     && idleFor >= COAST_DELAY_MS
     && !document.body.classList.contains('reading-brief');
   mode = canCoast ? 'time-pocket' : 'flight';
@@ -151,6 +153,7 @@ function animate(now) {
     ready: true,
     mode,
     hasFlightInput,
+    stopAcquired,
     loopEdgeGuard: loopEdge,
     loopEdgeGuardPx: LOOP_EDGE_GUARD_PX,
     coastStrength,
