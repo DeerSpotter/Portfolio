@@ -43,19 +43,16 @@ export function createBillboardFieldRenderer({ hud, billboard, reducedMotion }) 
         canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
       }
     }
-    let x = screen.x, y = screen.y;
-    if (compact) {
-      const rect = billboard.getBoundingClientRect(), host = hud.getBoundingClientRect();
-      x = rect.x - host.x + rect.width / 2 + hud.scrollLeft;
-      y = rect.y - host.y + rect.height / 2 + hud.scrollTop;
-    }
-    const transform = `translate3d(${x}px,${y}px,0) translate(-50%,-50%) perspective(900px) rotateY(${compact ? 0 : screen.yaw}deg) rotateZ(${compact ? 0 : screen.roll}deg) skewY(${compact ? 0 : screen.skew}deg) scale(${compact ? 1 : screen.scale})`;
+    // Mobile now uses the same projected pose as the card itself. The compact
+    // renderer still draws fewer orbital objects and omits flame vents, but it
+    // no longer assumes a static card or re-centers from its transformed rect.
+    const transform = `translate3d(${screen.x}px,${screen.y}px,0) translate(-50%,-50%) perspective(900px) rotateY(${screen.yaw}deg) rotateZ(${screen.roll}deg) skewY(${screen.skew}deg) scale(${screen.scale})`;
     const strength = Math.min(1, ({ distant: 0, approaching: .2, arming: .58, active: .96, passing: .44 }[projected.state] || 0)
       + (projected.state === 'active' ? timeFieldStrength * .04 : 0));
     const counts = [];
     layers.forEach(([canvas, ctx], layer) => {
       canvas.style.transform = transform;
-      canvas.style.opacity = compact ? '1' : String(projected.alpha);
+      canvas.style.opacity = String(projected.alpha);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
       ctx.translate(w / 2, h / 2);
       const front = layer === 1;
