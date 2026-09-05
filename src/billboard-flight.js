@@ -407,7 +407,7 @@ function render(now = performance.now()) {
     fieldRearLayer: field.rearLayer,
     fieldContract: field.contract,
     proceduralSeed: field.seed,
-    moonCount: field.moons?.length,
+    moonCount: field.moonCount,
     asteroidCount: field.asteroidCount,
     contract: 'approaching-skewed-interactive-billboard-v3',
   };
