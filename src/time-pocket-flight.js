@@ -56,7 +56,11 @@ function updateLock(progress) {
 
   const lockedDistance = Math.abs(wrapSigned(lockedStop.at - progress));
   const passed = wrapSigned(lockedStop.at - progress) < -LOCK_RELEASE_DISTANCE;
-  if (passed || lockedDistance > 0.16) {
+  const deliberateJump = nearest.stop !== lockedStop
+    && nearest.distance < 0.025
+    && lockedDistance > 0.105;
+
+  if (passed || lockedDistance > 0.16 || deliberateJump) {
     lockedStop = nearest.distance <= LOCK_ACQUIRE_DISTANCE ? nearest.stop : null;
   }
 }
