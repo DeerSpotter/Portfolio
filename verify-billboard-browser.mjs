@@ -150,7 +150,7 @@ function assertLifecycle(samples, expectedStop, label) {
     throw new Error(`${label}: active field corona incomplete: rear=${active.billboard.rearFlameCount}, front=${active.billboard.frontFlameCount}`);
   }
 
-  return { active, passing, lateral, fieldStrengths };
+  return { lateral, fieldStrengths };
 }
 
 try {
