@@ -340,6 +340,7 @@ function animate(now) {
       fov: camera.fov,
       bankOffset: cameraBankOffset,
       seamBlend: cameraSeamBlend,
+      forwardBlend: 'wrapped-yaw-pitch',
       distanceToShip: cameraDistanceToShip,
     },
     backgroundRenderer: state.engine,
