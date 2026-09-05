@@ -6,15 +6,23 @@ for (const required of [
   "const LOOP_INTENT_EVENT = 'portfolio-flight-loop-intent';",
   'function deliverActiveGesture()',
   'function deliverCompletedGesture(direction)',
+  'function carryForwardAcrossSeam()',
   "new CustomEvent(LOOP_INTENT_EVENT",
-  "contract: 'touch-edge-to-flight-loop-v3'",
-  "delivery: 'active-gesture-edge-intent-with-touchend-fallback'",
+  "contract: 'touch-edge-to-flight-loop-v5'",
+  "delivery: 'one-shot-seam-handoff-with-same-gesture-control'",
+  "seamAssist: 'single-controller-jump-06-through-01-v3'",
+  'frameScrollWrites: 0',
   'BLOCKED_SWIPE_SELECTOR',
 ]) {
   if (!touchSource.includes(required)) throw new Error(`Touch flight contract missing: ${required}`);
 }
-for (const forbidden of ['new WheelEvent(', 'dispatchEvent(new WheelEvent']) {
-  if (touchSource.includes(forbidden)) throw new Error(`Touch flight must not synthesize desktop wheel input: ${forbidden}`);
+for (const forbidden of [
+  'new WheelEvent(',
+  'dispatchEvent(new WheelEvent',
+  'function advance(now)',
+  'SEAM_ASSIST_DURATION_MS',
+]) {
+  if (touchSource.includes(forbidden)) throw new Error(`Touch flight contains forbidden seam behavior: ${forbidden}`);
 }
 if (touchSource.includes("closest('.detail")) {
   throw new Error('The flight billboard must remain a swipe surface; only actual controls/dialogs may block touch flight.');
@@ -193,30 +201,39 @@ try {
     throw new Error(`Reduced-motion field detached from projected card: center offset=${fieldOffset.toFixed(2)}px.`);
   }
   if (reduced.fieldComputedTransform === 'none') throw new Error('Reduced-motion procedural field lost its projected transform.');
-  if (reduced.touchInput?.contract !== 'touch-edge-to-flight-loop-v3'
-    || reduced.touchInput?.delivery !== 'active-gesture-edge-intent-with-touchend-fallback') {
+  if (reduced.touchInput?.contract !== 'touch-edge-to-flight-loop-v5'
+    || reduced.touchInput?.delivery !== 'one-shot-seam-handoff-with-same-gesture-control') {
     throw new Error(`Touch flight input adapter is missing: ${JSON.stringify(reduced.touchInput)}`);
   }
   if (reduced.touchInput?.blockedSelector?.includes('.detail')) {
     throw new Error(`Flight billboard is still blocked as a swipe surface: ${reduced.touchInput.blockedSelector}`);
   }
+  if (reduced.touchInput?.frameScrollWrites !== 0) {
+    throw new Error(`Mobile seam reintroduced frame-by-frame scroll writes: ${JSON.stringify(reduced.touchInput)}`);
+  }
   if (reduced.canvasInputLoop !== 'wheel-plus-semantic-touch-intent-v2') {
     throw new Error(`Canvas flight does not own semantic touch recycle intent: ${reduced.canvasInputLoop}`);
   }
 
-  // The reported iPhone failure happens before finger release: the native page
-  // reaches its hard lower boundary while the finger is still moving, and the
-  // ship parks there until touchend. Prove that reaching the edge on touchmove
-  // recycles immediately, even when the swipe starts on the billboard itself.
+  // Start before the hard document edge. One continuous upward gesture must
+  // cross 06 -> 01 without touching a wall, land beyond Start here (0.04), and
+  // keep accepting movement from the same still-held finger on the new lap.
   await reducedPage.locator('[data-stop="5"]').click();
   await reducedPage.waitForFunction(() => window.__portfolioCanvasDebug?.activeStop === 'Clarity');
   await reducedPage.evaluate(() => {
-    window.scrollTo(0, document.documentElement.scrollHeight - innerHeight);
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+    window.scrollTo(0, maxScroll * 0.94);
     window.__portfolioTestWheelEvents = 0;
     addEventListener('wheel', () => { window.__portfolioTestWheelEvents += 1; });
   });
   await reducedPage.waitForTimeout(100);
-  const beforeTouchLoop = await reducedPage.evaluate(() => window.__portfolioCanvasDebug.loopCycle);
+  const beforeTouchLoop = await reducedPage.evaluate(() => ({
+    loopCycle: window.__portfolioCanvasDebug.loopCycle,
+    local: scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight),
+  }));
+  if (beforeTouchLoop.local < 0.93 || beforeTouchLoop.local >= 0.99) {
+    throw new Error(`Seam proof did not begin before the hard edge: ${JSON.stringify(beforeTouchLoop)}`);
+  }
 
   await reducedPage.evaluate(() => {
     const surface = document.querySelector('.detail');
@@ -225,47 +242,76 @@ try {
       Object.defineProperty(event, 'touches', { value: y === null ? [] : [{ clientY: y }] });
       surface.dispatchEvent(event);
     };
+    window.__portfolioContinueTestTouch = y => touchEvent('touchmove', y);
     window.__portfolioFinishTestTouch = () => touchEvent('touchend');
     touchEvent('touchstart', 320);
     touchEvent('touchmove', 235);
   });
 
-  await reducedPage.waitForFunction(before => window.__portfolioCanvasDebug.loopCycle >= before + 1, beforeTouchLoop, { timeout: 1000 });
-  const duringTouchLoop = await reducedPage.evaluate(() => ({
-    loopCycle: window.__portfolioCanvasDebug.loopCycle,
-    progress: window.__portfolioCanvasDebug.progress,
-    y: scrollY,
-    wheelEvents: window.__portfolioTestWheelEvents,
-  }));
+  await reducedPage.waitForFunction(before => window.__portfolioCanvasDebug.loopCycle >= before + 1, beforeTouchLoop.loopCycle, { timeout: 1000 });
+  const duringTouchLoop = await reducedPage.evaluate(() => {
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+    return {
+      loopCycle: window.__portfolioCanvasDebug.loopCycle,
+      progress: window.__portfolioCanvasDebug.progress,
+      y: scrollY,
+      local: scrollY / maxScroll,
+      wheelEvents: window.__portfolioTestWheelEvents,
+    };
+  });
   if (duringTouchLoop.wheelEvents !== 0) {
-    throw new Error(`Active touch loop remapped through synthetic wheel input: ${JSON.stringify(duringTouchLoop)}`);
+    throw new Error(`Seam handoff remapped through synthetic wheel input: ${JSON.stringify(duringTouchLoop)}`);
   }
-  if (duringTouchLoop.loopCycle !== beforeTouchLoop + 1) {
-    throw new Error(`Active swipe did not recycle exactly once before release: ${JSON.stringify(duringTouchLoop)}`);
+  if (duringTouchLoop.loopCycle !== beforeTouchLoop.loopCycle + 1) {
+    throw new Error(`Continuous swipe did not advance exactly one lap: ${JSON.stringify(duringTouchLoop)}`);
   }
-  if (duringTouchLoop.y > 12) {
-    throw new Error(`Active swipe did not recycle away from the document boundary: ${JSON.stringify(duringTouchLoop)}`);
+  if (duringTouchLoop.local < 0.06 || duringTouchLoop.local > 0.10) {
+    throw new Error(`Seam handoff did not land past Start here without a wall: ${JSON.stringify(duringTouchLoop)}`);
+  }
+
+  // Keep the same finger down and move again. The scroll controller must keep
+  // advancing on the new lap instead of parking until touchend/new swipe.
+  await reducedPage.evaluate(() => window.__portfolioContinueTestTouch(195));
+  await reducedPage.waitForTimeout(80);
+  const continuedTouch = await reducedPage.evaluate(() => {
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+    return {
+      loopCycle: window.__portfolioCanvasDebug.loopCycle,
+      y: scrollY,
+      local: scrollY / maxScroll,
+      wheelEvents: window.__portfolioTestWheelEvents,
+    };
+  });
+  if (continuedTouch.loopCycle !== beforeTouchLoop.loopCycle + 1) {
+    throw new Error(`Same held gesture caused an extra lap transition: ${JSON.stringify(continuedTouch)}`);
+  }
+  if (continuedTouch.y <= duringTouchLoop.y + 5) {
+    throw new Error(`Same held gesture hit a wall after the seam: before=${JSON.stringify(duringTouchLoop)}, after=${JSON.stringify(continuedTouch)}`);
+  }
+  if (continuedTouch.wheelEvents !== 0) {
+    throw new Error(`Same held gesture emitted synthetic wheel input: ${JSON.stringify(continuedTouch)}`);
   }
 
   await reducedPage.evaluate(() => {
     window.__portfolioFinishTestTouch();
+    delete window.__portfolioContinueTestTouch;
     delete window.__portfolioFinishTestTouch;
   });
-  await reducedPage.waitForTimeout(250);
+  await reducedPage.waitForTimeout(300);
   const afterTouchLoop = await reducedPage.evaluate(() => ({
     loopCycle: window.__portfolioCanvasDebug.loopCycle,
     progress: window.__portfolioCanvasDebug.progress,
     y: scrollY,
     wheelEvents: window.__portfolioTestWheelEvents,
   }));
-  if (afterTouchLoop.loopCycle !== beforeTouchLoop + 1) {
-    throw new Error(`Releasing the same swipe caused a duplicate recycle: ${JSON.stringify(afterTouchLoop)}`);
+  if (afterTouchLoop.loopCycle !== beforeTouchLoop.loopCycle + 1) {
+    throw new Error(`Releasing the continuous swipe caused a duplicate recycle: ${JSON.stringify(afterTouchLoop)}`);
   }
   if (afterTouchLoop.wheelEvents !== 0) {
     throw new Error(`Touch release emitted a synthetic wheel event: ${JSON.stringify(afterTouchLoop)}`);
   }
-  if (afterTouchLoop.progress > 0.10) {
-    throw new Error(`Mobile flight did not continue into the start corridor after active-swipe recycle: ${JSON.stringify(afterTouchLoop)}`);
+  if (afterTouchLoop.progress > 0.13) {
+    throw new Error(`Mobile flight did not settle into the post-Start corridor: ${JSON.stringify(afterTouchLoop)}`);
   }
   await reducedPage.close();
 
@@ -274,7 +320,7 @@ try {
   console.log('[portfolio-mobile] ios-text-inflation=disabled');
   console.log('[portfolio-mobile] reduced-motion=side-projected-reading-plane');
   console.log('[portfolio-mobile] billboard-action=compact-inline-link');
-  console.log('[portfolio-mobile] touch-loop=active-swipe-recycle-before-release');
+  console.log('[portfolio-mobile] touch-loop=one-swipe-no-wall-through-seam');
   console.log('[portfolio-mobile] billboard=valid-flight-swipe-surface');
   console.log('[portfolio-mobile] content=present-not-hidden');
   console.log('[portfolio-mobile] destination=compact-flight-corridor');
