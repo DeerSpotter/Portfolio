@@ -292,7 +292,14 @@ function animate(now) {
   camera.position.addScaledVector(cameraTransportDelta, cameraSeamBlend);
   previousCameraAnchor.copy(smoothPos);
 
-  camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
+  // The offset behind the ship also rotates quickly at this seam. Blend the
+  // usual loose chase damping into a rigid ship-relative rig while seam lock is
+  // active, so the camera cannot trail one frame behind that offset rotation.
+  // At blend=0 this is the exact established camera alpha. At blend=1 the
+  // camera is fully attached to the desired relative chase pose for the seam.
+  const normalCameraAlpha = 1 - Math.exp(-cameraLambda * dt);
+  const cameraFollowAlpha = THREE.MathUtils.lerp(normalCameraAlpha, 1, cameraSeamBlend);
+  camera.position.lerp(desiredCamera, cameraFollowAlpha);
 
   desiredLook.copy(smoothPos)
     .addScaledVector(cameraForward, 13.5 + warpAmount * 12)
@@ -360,6 +367,7 @@ function animate(now) {
       seamBlend: cameraSeamBlend,
       forwardBlend: 'wrapped-yaw-pitch',
       translationMode: cameraSeamBlend > 0 ? 'ship-relative' : 'world-chase',
+      followAlpha: cameraFollowAlpha,
       distanceToShip: cameraDistanceToShip,
     },
     backgroundRenderer: state.engine,
