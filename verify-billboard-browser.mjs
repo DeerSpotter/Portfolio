@@ -19,6 +19,7 @@ async function moveTo(progress) {
       exists: Boolean(canvas),
       pointerEvents: canvas ? getComputedStyle(canvas).pointerEvents : null,
       zIndex: canvas ? Number.parseInt(getComputedStyle(canvas).zIndex, 10) : null,
+      opacity: canvas ? Number.parseFloat(getComputedStyle(canvas).opacity) : null,
       ariaHidden: canvas?.getAttribute('aria-hidden'),
       width: canvas?.width || 0,
       height: canvas?.height || 0,
@@ -27,6 +28,7 @@ async function moveTo(progress) {
       billboard: structuredClone(window.__portfolioBillboardDebug),
       state: detail?.dataset.billboardState,
       interactive: detail?.dataset.interactive,
+      opacity: Number.parseFloat(getComputedStyle(detail).opacity),
       pointerEvents: getComputedStyle(detail).pointerEvents,
       actionTabIndex: document.getElementById('detailAction')?.tabIndex,
       rearFlame: canvasSnapshot(rearFlame),
@@ -34,6 +36,43 @@ async function moveTo(progress) {
       detailZIndex: Number.parseInt(getComputedStyle(detail).zIndex, 10),
     };
   });
+}
+
+function assertSideFade(samples, label) {
+  for (const sample of samples) {
+    if (sample.billboard.state !== 'passing') {
+      throw new Error(`${label}: expected passing state during side fade, got ${sample.billboard.state}.`);
+    }
+  }
+
+  for (let index = 1; index < samples.length; index++) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const lateralTravel = (current.billboard.x - previous.billboard.x) * previous.billboard.side;
+    if (lateralTravel <= 0) {
+      throw new Error(`${label}: pane did not continue toward its assigned side: ${previous.billboard.x} -> ${current.billboard.x}, side=${previous.billboard.side}`);
+    }
+    if (!(current.billboard.alpha < previous.billboard.alpha)) {
+      throw new Error(`${label}: pane did not fade continuously: ${previous.billboard.alpha} -> ${current.billboard.alpha}`);
+    }
+    if (!(current.billboard.exitProgress > previous.billboard.exitProgress)) {
+      throw new Error(`${label}: exit progress did not advance: ${previous.billboard.exitProgress} -> ${current.billboard.exitProgress}`);
+    }
+  }
+
+  const late = samples.at(-1);
+  if (late.billboard.alpha > 0.14) {
+    throw new Error(`${label}: pane remained too visible at the end of its side exit: alpha=${late.billboard.alpha}`);
+  }
+  for (const [surface, opacity] of [
+    ['HTML pane', late.opacity],
+    ['rear field', late.rearFlame.opacity],
+    ['front field', late.frontFlame.opacity],
+  ]) {
+    if (Math.abs(opacity - late.billboard.alpha) > 0.02) {
+      throw new Error(`${label}: ${surface} did not share exit fade alpha: rendered=${opacity}, projected=${late.billboard.alpha}`);
+    }
+  }
 }
 
 try {
@@ -45,11 +84,13 @@ try {
   const arming = await moveTo(0.150);
   const active = await moveTo(0.180);
   const passing = await moveTo(0.190);
+  const engineeringExitMid = await moveTo(0.215);
+  const engineeringExitLate = await moveTo(0.238);
 
   const samples = [distant, approaching, arming, active, passing];
-  for (const sample of samples) {
+  for (const sample of [...samples, engineeringExitMid, engineeringExitLate]) {
     if (sample.billboard.stop !== 'Engineering') {
-      throw new Error(`Expected Engineering billboard through pass, got ${sample.billboard.stop} in ${sample.billboard.state}.`);
+      throw new Error(`Expected Engineering billboard through its full side-fade pass, got ${sample.billboard.stop} in ${sample.billboard.state}.`);
     }
   }
 
@@ -129,6 +170,32 @@ try {
     throw new Error(`Active front flame corona is incomplete: ${active.billboard.frontFlameCount}`);
   }
 
+  // Engineering's art is on the right, so its pane is on the left. It must
+  // continue left while fading instead of disappearing when the stop passes.
+  assertSideFade([passing, engineeringExitMid, engineeringExitLate], 'left-side Engineering exit');
+  if (!(engineeringExitLate.billboard.side < 0)) {
+    throw new Error(`Engineering pane should occupy the left lane, side=${engineeringExitLate.billboard.side}`);
+  }
+
+  // Vault's art is on the left, so its pane is on the right. Prove the same
+  // exit behavior in the opposite direction rather than testing one side only.
+  const vaultActive = await moveTo(0.340);
+  const vaultPassing = await moveTo(0.350);
+  const vaultExitMid = await moveTo(0.375);
+  const vaultExitLate = await moveTo(0.398);
+  for (const sample of [vaultActive, vaultPassing, vaultExitMid, vaultExitLate]) {
+    if (sample.billboard.stop !== 'Vault automation') {
+      throw new Error(`Expected Vault automation billboard through right-side exit, got ${sample.billboard.stop}.`);
+    }
+  }
+  if (vaultActive.billboard.state !== 'active' || vaultPassing.billboard.state !== 'passing') {
+    throw new Error(`Vault exit did not enter from active->passing: ${vaultActive.billboard.state}->${vaultPassing.billboard.state}`);
+  }
+  if (!(vaultExitLate.billboard.side > 0)) {
+    throw new Error(`Vault pane should occupy the right lane, side=${vaultExitLate.billboard.side}`);
+  }
+  assertSideFade([vaultPassing, vaultExitMid, vaultExitLate], 'right-side Vault exit');
+
   const orbit = await page.evaluate(() => ({
     background: window.__portfolioCanvasDebug.orbitalBackground,
     billboard: window.__portfolioBillboardDebug,
@@ -149,6 +216,7 @@ try {
   console.log(`[portfolio-billboard-browser] turbulentVents=rear:${active.billboard.rearFlameCount},front:${active.billboard.frontFlameCount}`);
   console.log('[portfolio-billboard-browser] flameDefinition=continuous-noise-translucent-hot-core');
   console.log('[portfolio-billboard-browser] flameLayers=rear<billboard<front');
+  console.log('[portfolio-billboard-browser] paneExit=left->left-fade,right->right-fade');
 } finally {
   await browser.close();
 }
