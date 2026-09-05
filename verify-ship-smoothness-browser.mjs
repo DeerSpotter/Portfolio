@@ -3,8 +3,9 @@ import { chromium } from 'playwright';
 const url = process.env.PORTFOLIO_URL || 'http://127.0.0.1:8231/';
 const browser = await chromium.launch({ headless: true });
 
-function angleDelta(a, b) {
-  return Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a)));
+function quaternionStep(a, b) {
+  const dot = Math.abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);
+  return 2 * Math.acos(Math.min(1, Math.max(-1, dot)));
 }
 
 async function exercise(viewport, reducedMotion, label) {
@@ -20,6 +21,9 @@ async function exercise(viewport, reducedMotion, label) {
   }
   if (initial.positionTrackingError > 0.001 || initial.cameraTrackingError > 0.001) {
     throw new Error(`${label}: ship already lags route before input: position=${initial.positionTrackingError}, camera=${initial.cameraTrackingError}`);
+  }
+  if (!initial.ship?.quaternion) {
+    throw new Error(`${label}: rendered quaternion diagnostics are missing.`);
   }
 
   await page.evaluate(() => {
@@ -43,9 +47,7 @@ async function exercise(viewport, reducedMotion, label) {
             x: ship.ship.x,
             y: ship.ship.y,
             z: ship.ship.z,
-            pitch: ship.ship.pitch,
-            yaw: ship.ship.yaw,
-            roll: ship.ship.roll,
+            quaternion: structuredClone(ship.ship.quaternion),
           });
         }
         frames += 1;
@@ -77,11 +79,7 @@ async function exercise(viewport, reducedMotion, label) {
   for (let i = 1; i < samples.length; i++) {
     const prev = samples[i - 1];
     const next = samples[i];
-    const attitudeStep = Math.max(
-      angleDelta(prev.pitch, next.pitch),
-      angleDelta(prev.yaw, next.yaw),
-      angleDelta(prev.roll, next.roll),
-    );
+    const attitudeStep = quaternionStep(prev.quaternion, next.quaternion);
     maxAttitudeStep = Math.max(maxAttitudeStep, attitudeStep);
     const displacement = Math.hypot(next.x - prev.x, next.y - prev.y, next.z - prev.z);
     if (displacement > 0.01) movingFrames += 1;
@@ -91,10 +89,10 @@ async function exercise(viewport, reducedMotion, label) {
     throw new Error(`${label}: route motion collapsed into too few frames: movingFrames=${movingFrames}`);
   }
   if (maxAttitudeStep > 0.24) {
-    throw new Error(`${label}: ship attitude still snaps between frames: max step=${maxAttitudeStep}`);
+    throw new Error(`${label}: rendered ship orientation still snaps between frames: max quaternion step=${maxAttitudeStep}`);
   }
 
-  console.log(`[portfolio-ship-smoothness] ${label} PASS progress=${progressTravel.toFixed(3)} movingFrames=${movingFrames} maxAttitudeStep=${maxAttitudeStep.toFixed(4)}`);
+  console.log(`[portfolio-ship-smoothness] ${label} PASS progress=${progressTravel.toFixed(3)} movingFrames=${movingFrames} maxQuaternionStep=${maxAttitudeStep.toFixed(4)}`);
   await page.close();
 }
 
@@ -104,7 +102,7 @@ try {
   console.log('[portfolio-ship-smoothness] PASS');
   console.log('[portfolio-ship-smoothness] position=route-locked-no-secondary-damping');
   console.log('[portfolio-ship-smoothness] camera=route-locked-translation');
-  console.log('[portfolio-ship-smoothness] attitude=quaternion-smoothed');
+  console.log('[portfolio-ship-smoothness] attitude=rendered-quaternion-continuity');
 } finally {
   await browser.close();
 }
