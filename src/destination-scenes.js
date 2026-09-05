@@ -1,6 +1,6 @@
 import { createOrbitalSystem, drawMoon, drawRock, TAU } from './procedural-cosmos.js';
 import { createAsteroidTraffic } from './asteroid-traffic.js';
-import { drawDestinationRobotics } from './destination-robotics.js';
+import { createDestinationBlueprint } from './destination-blueprint.js';
 
 export const destinations = {
   briefTitle: { name: 'Orbital reception', place: 'The arrival terminal', kind: 'base', sky: ['#0b2027', '#496962'], accent: '#e4c18a', tint: '#93b0a5', seed: 117 },
@@ -14,7 +14,7 @@ export const destinations = {
 export function createDestinationScene(canvas) {
   const ctx = canvas.getContext('2d');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let frame = 0, started = 0, last = 0, config, system, texture, traffic;
+  let frame = 0, started = 0, last = 0, config, system, texture, traffic, blueprint;
   const observer = new ResizeObserver(resize);
   function resize() {
     const dpr = Math.min(devicePixelRatio || 1, 1.4);
@@ -134,7 +134,7 @@ export function createDestinationScene(canvas) {
     if (['mars', 'archive', 'observatory'].includes(config.kind)) ground(w, h, t);
     else station(w, h, t);
     ctx.restore();
-    drawDestinationRobotics(ctx, w, h, t, config);
+    blueprint.render(ctx, w, h, t, config);
     traffic.render(ctx, w, h, dt, .12, reduced, w < 700);
     frame = requestAnimationFrame(render);
   }
@@ -143,6 +143,7 @@ export function createDestinationScene(canvas) {
       cancelAnimationFrame(frame); config = destination; system = createOrbitalSystem(config.seed);
       texture = document.createElement('canvas'); texture.width = texture.height = 512;
       drawMoon(texture.getContext('2d'), system, 256, 256, 205, config.tint);
+      blueprint = createDestinationBlueprint(config.seed);
       traffic = createAsteroidTraffic(config.seed); started = last = performance.now();
       resize(); observer.observe(canvas); frame = requestAnimationFrame(render);
     },
