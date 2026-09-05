@@ -25,12 +25,12 @@ for (const required of [
   'const seamNeutralZone = progress >= 1 - BANK_SEAM_APPROACH_PROGRESS',
   'bankSeamNeutralizing = true;',
   'const cameraBankOffset = -ship.rotation.z * 0.92;',
-  'cameraForward.copy(smoothTangent).lerp(shipForward, cameraSeamBlend).normalize();',
+  'blendForwardDirection(cameraForward, smoothTangent, shipForward, cameraSeamBlend);',
   'shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();',
   'screenX: shipScreenX',
   'distanceToShip: cameraDistanceToShip',
   'requestedBankSide !== activeBankSide',
-  "motionContract: 'known-good-flight-centered-bank-v5'",
+  "motionContract: 'known-good-flight-centered-bank-v6'",
 ]) {
   if (!source.includes(required)) throw new Error(`Centered-bank contract missing: ${required}`);
 }
@@ -42,6 +42,7 @@ for (const forbidden of [
   'tangentBefore',
   'tangentAfter',
   'turnSignal * 2.55 - filteredVelocity * 0.26',
+  'cameraForward.copy(smoothTangent).lerp(shipForward, cameraSeamBlend).normalize();',
 ]) {
   if (source.includes(forbidden)) throw new Error(`Out-of-scope ship steering returned: ${forbidden}`);
 }
@@ -54,7 +55,7 @@ async function exercise(viewport, label, reducedMotion = false) {
   await page.waitForTimeout(250);
 
   const initialContract = await page.evaluate(() => window.__portfolioShipDebug?.motionContract);
-  if (initialContract !== 'known-good-flight-centered-bank-v5') {
+  if (initialContract !== 'known-good-flight-centered-bank-v6') {
     throw new Error(`${label}: wrong ship motion contract: ${initialContract}`);
   }
 
@@ -290,7 +291,7 @@ try {
   console.log('[portfolio-ship-bank] PASS');
   console.log('[portfolio-ship-bank] sequence=bank-right-center-bank-left-center');
   console.log('[portfolio-ship-bank] reloop=prelevel-before-06-to-01-wrap');
-  console.log('[portfolio-ship-bank] camera=rendered-ship-forward-through-antipodal-route-tangent');
+  console.log('[portfolio-ship-bank] camera=wrapped-angle-rendered-ship-forward-through-antipodal-route-tangent');
   console.log('[portfolio-ship-bank] visual=screen-space-seam-launch-regression');
   console.log('[portfolio-ship-bank] input=signed-route-curvature-only');
   console.log('[portfolio-ship-bank] scope=ship-seam-only-panes-and-route-unchanged');
