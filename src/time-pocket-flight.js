@@ -146,7 +146,8 @@ function animate(now) {
     && !loopEdge
     && stopAcquired
     && idleFor >= COAST_DELAY_MS
-    && !document.body.classList.contains('reading-brief');
+    && !document.body.classList.contains('reading-brief')
+    && document.querySelector('.detail')?.dataset.readingHold !== 'true';
   mode = canCoast ? 'time-pocket' : 'flight';
 
   if (mode !== lastDomMode) {

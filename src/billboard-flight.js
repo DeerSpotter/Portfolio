@@ -19,6 +19,53 @@ let interactionHoldUntil = 0;
 let interactionHoldConsumedStop = null;
 let releasePose = null;
 
+// Navigation is an explicit request to read a stop. Keep its reading plane
+// stationary until the visitor resumes flight; ambient scenery keeps moving.
+let navigationStop = null;
+let navigationPose = null;
+let focusPose = null;
+let lastPresentedPose = null;
+
+addEventListener('portfolio:waypoint-navigation', event => {
+  navigationStop = waypoints.find(stop => stop.title === event.detail?.title) || null;
+  navigationPose = null;
+  focusPose = null;
+  interactionHold = null;
+  interactionHoldConsumedStop = null;
+  releasePose = null;
+  billboard.dataset.readingHold = navigationStop ? 'true' : 'false';
+});
+
+function resumeFlight(event) {
+  if (event.target instanceof Element && event.target.closest('.detail, dialog, button, a')) return;
+  if (event.type === 'keydown' && !['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) return;
+  if (navigationPose || focusPose) releasePose = { ...(navigationPose || focusPose), started: performance.now() };
+  navigationStop = null;
+  navigationPose = null;
+  focusPose = null;
+  billboard.dataset.readingHold = 'false';
+}
+addEventListener('wheel', resumeFlight, { passive: true });
+addEventListener('touchmove', resumeFlight, { passive: true });
+addEventListener('keydown', resumeFlight);
+addEventListener('pointerdown', resumeFlight, { passive: true });
+
+function captureFocusPose() {
+  if (billboard.dataset.interactive !== 'true' || !lastPresentedPose) return;
+  focusPose = { ...lastPresentedPose };
+  billboard.dataset.readingHold = 'true';
+}
+billboard.addEventListener('pointerenter', captureFocusPose);
+billboard.addEventListener('focusin', captureFocusPose);
+function releaseFocusPose() {
+  if (billboard.matches(':hover') || billboard.contains(document.activeElement)) return;
+  if (focusPose) releasePose = { ...focusPose, started: performance.now() };
+  focusPose = null;
+  billboard.dataset.readingHold = navigationStop ? 'true' : 'false';
+}
+billboard.addEventListener('pointerleave', releaseFocusPose);
+billboard.addEventListener('focusout', () => queueMicrotask(releaseFocusPose));
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -207,21 +254,31 @@ function render(now = performance.now()) {
   const pocket = window.__portfolioTimePocketDebug;
   const coastStrength = reducedMotion ? 0 : (pocket?.coastStrength || 0);
   const timeFieldStrength = reducedMotion ? 0 : (pocket?.timeFieldStrength || 0);
-  const stop = chooseStop(debug.progress, debug.activeStop);
+  const stop = navigationStop || chooseStop(debug.progress, debug.activeStop);
   const projected = project(stop, debug.progress, coastStrength);
   const hold = heldScreen(stop, projected, pocket, timeFieldStrength, now);
+  if (navigationStop && !navigationPose && debug.settled && projected.interactive) {
+    navigationPose = { ...projected, stopTitle: stop.title };
+  }
+  const readingPose = navigationPose || (focusPose?.stopTitle === stop.title ? focusPose : null);
   const screen = { ...hold.screen };
-  if (releasePose && !hold.held && releasePose.stopTitle === stop.title) {
+  if (readingPose) {
+    for (const key of ['x', 'y', 'scale', 'yaw', 'roll', 'skew']) screen[key] = readingPose[key];
+  }
+  billboard.dataset.readingHold = navigationStop || readingPose ? 'true' : 'false';
+  if (releasePose && !hold.held && !readingPose && releasePose.stopTitle === stop.title) {
     const remaining = Math.exp(-(now - releasePose.started) / 180);
     for (const key of ['x', 'y', 'scale', 'yaw', 'roll', 'skew']) {
       screen[key] += (releasePose[key] - screen[key]) * remaining;
     }
     if (remaining < .001) releasePose = null;
-  } else if (hold.held || releasePose?.stopTitle !== stop.title) releasePose = null;
+  } else if (hold.held || readingPose || releasePose?.stopTitle !== stop.title) releasePose = null;
   // Give the text and both effect planes exactly the same numeric pose.
   for (const key of ['x', 'y', 'scale', 'yaw', 'roll', 'skew']) {
     screen[key] = Number(screen[key].toFixed(key === 'scale' ? 4 : 2));
   }
+
+  lastPresentedPose = { ...screen, stopTitle: stop.title };
 
   if (stop !== displayed) {
     displayed = stop;
@@ -265,6 +322,8 @@ function render(now = performance.now()) {
     stop: stop.title,
     state: projected.state,
     interactive: projected.interactive || reducedMotion,
+    readingHold: Boolean(readingPose),
+    navigationHold: Boolean(navigationPose),
     interactionHold: hold.held,
     interactionHoldConsumed: interactionHoldConsumedStop === stop.title,
     interactionHoldMs: INTERACTION_HOLD_MS,

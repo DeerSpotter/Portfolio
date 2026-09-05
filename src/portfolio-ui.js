@@ -36,6 +36,7 @@ navigation.forEach(button => {
   button.addEventListener('click', () => {
     const waypoint = waypoints[Number(button.dataset.stop)];
     const maxScroll = document.documentElement.scrollHeight - innerHeight;
+    window.dispatchEvent(new CustomEvent('portfolio:waypoint-navigation', { detail: { title: waypoint.title } }));
     window.scrollTo({ top: maxScroll * waypoint.at, behavior: 'instant' });
   });
 });

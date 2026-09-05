@@ -175,3 +175,13 @@ and links remain available, with vertical scrolling on small screens or enlarged
 text. The six facilities retain their settings and add articulated service arms,
 grippers, assembly platforms and instrument tracks. The scene sizes itself to
 its own viewport rather than the browser window. No local tests were run.
+
+### Clickable reading stops
+
+Selecting a waypoint now anchors its reading plane after the approach settles.
+Hover or keyboard focus also anchors the currently presented plane. Automatic
+coasting pauses during these interactions, while ambient rocks, flames, and
+facility animation continue. Explicit flight input outside the billboard
+releases the anchor; selecting another waypoint replaces it. This fixes the
+reported `#detailAction` stability timeout without forced clicks or longer test
+timeouts. No local tests were run for this correction.
