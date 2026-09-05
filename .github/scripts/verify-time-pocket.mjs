@@ -13,15 +13,18 @@ for (const required of [
   'COAST_RATE_FAR = 12',
   'COAST_RATE_NEAR = 4.5',
   'TIME_FIELD_RADIUS = 0.085',
+  'LOOP_EDGE_GUARD_PX = 18',
   'let hasFlightInput = false',
   'hasFlightInput = true',
-  'const canCoast = hasFlightInput',
+  'const loopEdge = nearLoopEdge()',
+  '&& !loopEdge',
   "mode = canCoast ? 'time-pocket' : 'flight'",
   'coastCarry += rate * dt',
   'syntheticScrollUntil = performance.now() + 90',
   'scrollBy(0, distance)',
   'const deliberateJump = nearest.stop !== lockedStop',
   'timeFieldStrength: field.strength',
+  'loopEdgeGuard: loopEdge',
   'lockedStop?.title || null',
 ]) {
   if (!controller.includes(required)) throw new Error(`Time-pocket behavior missing: ${required}`);
@@ -77,6 +80,7 @@ console.log('[portfolio-time-pocket] PASS');
 console.log('[portfolio-time-pocket] entry=user-flight-then-idle');
 console.log('[portfolio-time-pocket] idle=cinematic-time-dilation-pass');
 console.log('[portfolio-time-pocket] coast=12px/s-far->4.5px/s-near');
+console.log('[portfolio-time-pocket] loopEdges=18px-no-coast-guard');
 console.log('[portfolio-time-pocket] focus=latched-no-waypoint-01-reset');
 console.log('[portfolio-time-pocket] reverseJump=destination-reacquire');
 console.log('[portfolio-time-pocket] artwork=quieted-not-hidden');
