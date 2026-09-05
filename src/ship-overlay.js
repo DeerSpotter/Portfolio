@@ -53,16 +53,18 @@ const worldUp = new THREE.Vector3(0, 1, 0);
 const routePos = new THREE.Vector3();
 const smoothPos = new THREE.Vector3();
 const tangent = new THREE.Vector3();
-const tangentBefore = new THREE.Vector3();
-const tangentAfter = new THREE.Vector3();
 const smoothTangent = new THREE.Vector3(0, 0, -1);
 const curvatureProbe = new THREE.Vector3();
 const right = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
 let poseInitialized = false;
+let activeBankSide = 0;
 
-const TANGENT_SAMPLE_WINDOW = 0.006;
+const BANK_DEADBAND = 0.035;
+const BANK_CENTER_EPSILON = 0.025;
+const BANK_MAX_ROLL_RATE = 2.2;
+const REDUCED_MOTION_BANK_SCALE = 0.62;
 
 function wrap01(value) {
   return ((value % 1) + 1) % 1;
@@ -114,14 +116,6 @@ function animate(now) {
   route.getPointAt(progress, routePos);
   route.getTangentAt(progress, tangent).normalize();
 
-  // Smooth direction in route space rather than adding more time-domain lag.
-  // The ship still uses the same travel, position, attitude and camera response
-  // constants as the last known-good baseline. Averaging neighboring tangents
-  // only removes tiny curvature discontinuities before they reach those filters.
-  route.getTangentAt(wrap01(progress - TANGENT_SAMPLE_WINDOW), tangentBefore).normalize();
-  route.getTangentAt(wrap01(progress + TANGENT_SAMPLE_WINDOW), tangentAfter).normalize();
-  tangent.multiplyScalar(2).add(tangentBefore).add(tangentAfter).normalize();
-
   if (!poseInitialized) {
     smoothPos.copy(routePos);
     smoothTangent.copy(tangent);
@@ -142,16 +136,51 @@ function animate(now) {
   route.getTangentAt(wrap01(progress + 0.008), curvatureProbe).normalize();
   const turnSignal = right.dot(curvatureProbe) * -1;
   const coastCalm = Math.max(0.18, 1 - coastAmount * 0.45 - timeFieldAmount * 0.36);
-  const targetRoll = reducedMotion ? 0 : THREE.MathUtils.clamp(
-    (turnSignal * 2.55 - filteredVelocity * 0.26) * coastCalm,
+  const bankMotionScale = reducedMotion ? REDUCED_MOTION_BANK_SCALE : 1;
+
+  // Roll is turn response only. Scroll speed can change thrust, but it cannot
+  // tell the ship which way to bank. As signed route curvature relaxes, the
+  // bank target naturally returns to level.
+  const targetRoll = THREE.MathUtils.clamp(
+    turnSignal * 2.55 * coastCalm * bankMotionScale,
     -0.82,
     0.82,
   );
 
+  // Bank is the only presentation behavior changed here. Never swing directly
+  // from one side to the other: ease the current bank back through level first,
+  // then allow the opposite bank to begin. Position, yaw, pitch and camera keep
+  // the established flight response unchanged.
+  const requestedBankSide = Math.abs(targetRoll) > BANK_DEADBAND ? Math.sign(targetRoll) : 0;
+  let bankTargetRoll = targetRoll;
+  if (requestedBankSide === 0) {
+    bankTargetRoll = 0;
+    if (Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON) activeBankSide = 0;
+  } else if (activeBankSide === 0) {
+    activeBankSide = requestedBankSide;
+  } else if (requestedBankSide !== activeBankSide) {
+    bankTargetRoll = 0;
+    if (Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON) {
+      activeBankSide = requestedBankSide;
+      bankTargetRoll = targetRoll;
+    }
+  }
+
   const attitudeLambda = Math.max(3.4, 8.5 - coastAmount * 3.2 - timeFieldAmount * 1.2);
   ship.rotation.y = dampAngle(ship.rotation.y, yaw, attitudeLambda, dt);
   ship.rotation.x = dampAngle(ship.rotation.x, -pitch * 0.86, attitudeLambda, dt);
-  ship.rotation.z = dampAngle(ship.rotation.z, targetRoll, Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount), dt);
+
+  // Keep the familiar exponential ease, but bound only the roll axis so a
+  // sudden change in curvature cannot produce a one-frame bank jolt. This does
+  // not affect route position, yaw, pitch, camera motion, or travel speed.
+  const rollLambda = Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount);
+  const easedRoll = dampAngle(ship.rotation.z, bankTargetRoll, rollLambda, dt);
+  const rollDelta = Math.atan2(
+    Math.sin(easedRoll - ship.rotation.z),
+    Math.cos(easedRoll - ship.rotation.z),
+  );
+  const maxBankStep = BANK_MAX_ROLL_RATE * dt;
+  ship.rotation.z += THREE.MathUtils.clamp(rollDelta, -maxBankStep, maxBankStep);
 
   setShipEngineState(ship, {
     thrust: warpAmount,
@@ -184,7 +213,7 @@ function animate(now) {
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-speed-spatial-tangent-v1',
+    motionContract: 'known-good-flight-centered-bank-v2',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -192,6 +221,15 @@ function animate(now) {
     warpAmount,
     coastAmount,
     timeFieldAmount,
+    bank: {
+      activeSide: activeBankSide,
+      requestedSide: requestedBankSide,
+      turnSignal,
+      targetRoll,
+      appliedTargetRoll: bankTargetRoll,
+      maxRollRate: BANK_MAX_ROLL_RATE,
+      reducedMotionScale: bankMotionScale,
+    },
     exhaust: 'turbulent-nozzle-rooted-shader-v1',
     engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
     ship: {
@@ -201,12 +239,6 @@ function animate(now) {
       pitch: ship.rotation.x,
       yaw: ship.rotation.y,
       roll: ship.rotation.z,
-      quaternion: {
-        x: ship.quaternion.x,
-        y: ship.quaternion.y,
-        z: ship.quaternion.z,
-        w: ship.quaternion.w,
-      },
     },
     camera: {
       x: camera.position.x,
