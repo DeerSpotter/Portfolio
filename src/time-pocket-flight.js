@@ -37,6 +37,7 @@ function noteUserInput() {
 }
 
 addEventListener('wheel', noteUserInput, { passive: true });
+addEventListener('scroll', noteUserInput, { passive: true });
 addEventListener('touchmove', noteUserInput, { passive: true });
 addEventListener('keydown', event => {
   if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) noteUserInput();
