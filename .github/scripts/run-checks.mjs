@@ -39,6 +39,7 @@ try {
     }
   }
   await run('Syntax: browser proof', process.execPath, ['--check', 'verify-canvas.mjs']);
+  await run('Layered scenery contract', process.execPath, ['.github/scripts/verify-scenery.mjs']);
   await run('Prepare browser test dependency', 'npm', ['init', '-y']);
   await run('Install pinned Playwright', 'npm', ['install', '--no-save', '--package-lock=false', 'playwright@1.55.0']);
   await run('Install Chromium and system dependencies', 'npx', ['playwright', 'install', '--with-deps', 'chromium']);
