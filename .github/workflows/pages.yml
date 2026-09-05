@@ -7,10 +7,10 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
+  actions: read
   pages: write
   id-token: write
-  issues: write
-  pull-requests: write
 
 concurrency:
   group: pages
@@ -22,37 +22,67 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - name: Check out site
-        uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Capture setup, syntax, packaging and browser diagnostics
-        run: node .github/scripts/run-checks.mjs
-      - name: Publish or update the single PR diagnostic
-        if: always()
+      - name: Locate successful PR validation artifact
+        id: validated
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node .github/scripts/report-ci.mjs
-      - name: Preserve complete diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          prs="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls")"
+
+          pr_number="$(jq -r '[.[] | select(.merged_at != null and .base.ref == "main")][0].number // empty' <<<"$prs")"
+          head_sha="$(jq -r '[.[] | select(.merged_at != null and .base.ref == "main")][0].head.sha // empty' <<<"$prs")"
+
+          if [[ -z "$pr_number" || -z "$head_sha" ]]; then
+            echo "No merged PR into main is associated with ${GITHUB_SHA}. Pages deploy requires a validated PR artifact instead of rebuilding the site." >&2
+            exit 1
+          fi
+
+          run_id="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/baseline-browser-proof.yml/runs?event=pull_request&head_sha=${head_sha}&status=success&per_page=20" \
+            --jq '.workflow_runs[0].id // empty')"
+
+          if [[ -z "$run_id" ]]; then
+            echo "PR #${pr_number} (${head_sha}) has no successful Baseline Browser Proof run. Refusing to rerun expensive validation during Pages deployment." >&2
+            exit 1
+          fi
+
+          echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
+          echo "head_sha=${head_sha}" >> "$GITHUB_OUTPUT"
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+          echo "Reusing validated site artifact from PR #${pr_number}, head ${head_sha}, run ${run_id}."
+
+      - name: Download exact validated public site
+        uses: actions/download-artifact@v4
         with:
-          name: portfolio-diagnostics
-          path: .ci-results/
-          include-hidden-files: true
-          if-no-files-found: error
-      - name: Fail normally after diagnostic publication
-        if: always()
-        run: node .github/scripts/enforce-result.mjs
+          name: portfolio-site-${{ steps.validated.outputs.head_sha }}
+          path: _site
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.validated.outputs.run_id }}
+
+      - name: Verify downloaded package exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f _site/index.html || {
+            echo "Validated Pages artifact is missing _site/index.html." >&2
+            exit 1
+          }
+          echo "Deploying the exact artifact already validated by PR #${{ steps.validated.outputs.pr_number }}."
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
-      - name: Upload public site package
+      - name: Upload validated site package to Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
