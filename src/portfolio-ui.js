@@ -12,9 +12,36 @@ const action = document.getElementById('detailAction');
 let displayed = -1;
 let returnFocus = null;
 
-export function showWaypoint(waypoint) {
+function wrap01(value) {
+  return ((value % 1) + 1) % 1;
+}
+
+function wrapSigned(value) {
+  let wrapped = wrap01(value);
+  if (wrapped > 0.5) wrapped -= 1;
+  return wrapped;
+}
+
+function stopForCurrentScroll() {
+  const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const progress = scrollY / maxScroll;
+  return waypoints.reduce((best, stop) => {
+    const distance = Math.abs(wrapSigned(stop.at - progress));
+    return !best || distance < best.distance ? { stop, distance } : best;
+  }, null).stop;
+}
+
+function resolvedWaypoint(requested) {
+  const lockedTitle = window.__portfolioTimePocketDebug?.lockedStop;
+  if (!lockedTitle) return requested;
+  return waypoints.find(stop => stop.title === lockedTitle) || requested;
+}
+
+export function showWaypoint(requestedWaypoint) {
+  const waypoint = resolvedWaypoint(requestedWaypoint);
   const index = waypoints.indexOf(waypoint);
-  if (index === displayed) return;
+  if (index < 0 || index === displayed) return;
+
   displayed = index;
   for (const [key, element] of Object.entries(fields)) element.textContent = waypoint[key];
   action.textContent = `${waypoint.action} ↗`;
@@ -32,8 +59,6 @@ navigation.forEach(button => {
   button.addEventListener('click', () => {
     const waypoint = waypoints[Number(button.dataset.stop)];
     const maxScroll = document.documentElement.scrollHeight - innerHeight;
-    // Native scroll remains the sole source of flight progress. Its existing
-    // damping provides travel; this does not replace or patch the flight math.
     window.scrollTo({ top: maxScroll * waypoint.at, behavior: 'instant' });
   });
 });
@@ -45,7 +70,6 @@ function openBrief(section, trigger) {
   brief.showModal();
   document.body.classList.add('reading-brief');
   target.focus({ preventScroll: true });
-  // Move only the dialog scrollport, preserving the flight's scroll position.
   const top = section === 'briefTitle' ? 0 : brief.scrollTop + target.getBoundingClientRect().top - brief.getBoundingClientRect().top - 90;
   brief.scrollTo({ top, behavior: 'instant' });
 }
@@ -60,8 +84,6 @@ brief.addEventListener('close', () => {
   if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
 });
 
-// These are independent reading scrollports. Their wheel input must not also
-// trigger the flight's forward/reverse edge recycling.
 for (const region of [brief, document.querySelector('.detail')]) {
   region.addEventListener('wheel', event => event.stopPropagation(), { passive: true });
 }
@@ -71,9 +93,12 @@ hud.addEventListener('wheel', event => {
   if (hud.scrollHeight > hud.clientHeight + 1) event.stopPropagation();
 }, { passive: true });
 
-showWaypoint(waypoints[0]);
+// Never hard-reset the panel to waypoint 01. Browsers can restore a previous
+// scroll position before or just after module startup, so initialize from the
+// actual flight position and resynchronize again on pageshow.
+showWaypoint(stopForCurrentScroll());
+addEventListener('pageshow', () => showWaypoint(stopForCurrentScroll()), { once: true });
 
-// A recruiter can open the general portfolio directly at the tailored brief.
 if (new URLSearchParams(location.search).get('brief') === 'deepgram') {
   openBrief('deepgram', document.querySelector('[data-open-brief="deepgram"]'));
 }
