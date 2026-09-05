@@ -5,12 +5,16 @@ This repository now uses a hybrid portfolio architecture. Treat it as the produc
 ## Baseline
 
 - `index.html` is the page shell and HUD.
+- `src/portfolio.css` styles the HUD and hiring brief using the baseline palette.
+- `src/portfolio-content.js` contains the six evidence-backed waypoint stories and original route placements.
+- `src/portfolio-ui.js` owns story navigation and the native hiring-brief dialog; document scroll remains the flight timeline.
 - `src/canvas-flight.js` renders the illustrated 2D / 2.5D parchment world, planets, rings, perspective motion, waypoints, trails, and seamless scroll loop.
 - `src/ship-overlay.js` renders only the 3D ship and chase camera over the canvas.
 - `src/ship-stub.js` is the documented procedural ship model currently used by the baseline.
 - `verify-canvas.mjs` is the browser regression proof.
 - `.github/workflows/pages.yml` deploys `main` to GitHub Pages.
 - `.github/workflows/baseline-browser-proof.yml` validates the baseline in CI.
+- `.github/scripts/` captures validation output, updates the single PR diagnostic comment, and fails the gate after publication.
 
 ## Locked direction
 
