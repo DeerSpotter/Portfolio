@@ -5,8 +5,6 @@ const source = readFileSync('src/ship-overlay.js', 'utf8');
 const url = process.env.PORTFOLIO_URL || 'http://127.0.0.1:8231/';
 const browser = await chromium.launch({ headless: true });
 
-// Keep the last known-good flight response. This PR is allowed to change bank
-// behavior only; it must not retune position, tangent, yaw/pitch or camera feel.
 for (const required of [
   'const positionLambda = 9.0 - coastAmount * 3.2 - timeFieldAmount * 1.4;',
   'const tangentLambda = 7.5 - coastAmount * 2.6 - timeFieldAmount * 1.3;',
@@ -14,11 +12,15 @@ for (const required of [
   'const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);',
   'const BANK_DEADBAND = 0.035;',
   'const BANK_CENTER_EPSILON = 0.025;',
+  'const BANK_MAX_ROLL_RATE = 2.2;',
+  'const BANK_SEAM_RELEASE_PROGRESS = 0.04;',
   'const REDUCED_MOTION_BANK_SCALE = 0.62;',
   'turnSignal * 2.55 * coastCalm * bankMotionScale',
+  'loopCycle !== observedLoopCycle',
+  'bankSeamNeutralizing = true;',
+  'seamDistance >= BANK_SEAM_RELEASE_PROGRESS',
   'requestedBankSide !== activeBankSide',
-  'bankTargetRoll = 0;',
-  "motionContract: 'known-good-flight-centered-bank-v2'",
+  "motionContract: 'known-good-flight-centered-bank-v3'",
 ]) {
   if (!source.includes(required)) throw new Error(`Centered-bank contract missing: ${required}`);
 }
@@ -30,8 +32,6 @@ for (const forbidden of [
   'tangentBefore',
   'tangentAfter',
   'turnSignal * 2.55 - filteredVelocity * 0.26',
-  "motionContract: 'route-locked-attitude-smoothed-v1'",
-  "motionContract: 'known-good-speed-spatial-tangent-v1'",
 ]) {
   if (source.includes(forbidden)) throw new Error(`Out-of-scope ship steering returned: ${forbidden}`);
 }
@@ -44,7 +44,7 @@ async function exercise(viewport, label, reducedMotion = false) {
   await page.waitForTimeout(250);
 
   const initialContract = await page.evaluate(() => window.__portfolioShipDebug?.motionContract);
-  if (initialContract !== 'known-good-flight-centered-bank-v2') {
+  if (initialContract !== 'known-good-flight-centered-bank-v3') {
     throw new Error(`${label}: wrong ship motion contract: ${initialContract}`);
   }
 
@@ -132,7 +132,93 @@ async function exercise(viewport, label, reducedMotion = false) {
     throw new Error(`${label}: bank still jolts between frames: max roll step=${maxRollStep}`);
   }
 
-  console.log(`[portfolio-ship-bank] ${label} PASS progress=${progressTravel.toFixed(3)} right=${positivePeak.toFixed(3)} left=${negativePeak.toFixed(3)} centerFrames=${centerGateFrames} transitions=${oppositeSideTransitions} maxRollStep=${maxRollStep.toFixed(4)}`);
+  const seam = await page.evaluate(async () => {
+    const result = [];
+    const max = document.documentElement.scrollHeight - innerHeight;
+    scrollTo(0, max);
+    for (let frame = 0; frame < 18; frame++) await new Promise(requestAnimationFrame);
+
+    const cycleBefore = window.__portfolioCanvasDebug.loopCycle;
+    dispatchEvent(new WheelEvent('wheel', { deltaY: 1000, cancelable: true }));
+
+    let cycleChanged = false;
+    for (let frame = 0; frame < 30; frame++) {
+      await new Promise(requestAnimationFrame);
+      if (window.__portfolioCanvasDebug.loopCycle !== cycleBefore) {
+        cycleChanged = true;
+        break;
+      }
+    }
+
+    for (let frame = 0; frame < 36; frame++) {
+      await new Promise(requestAnimationFrame);
+      const ship = window.__portfolioShipDebug;
+      result.push({
+        phase: 'seam',
+        roll: ship.ship.roll,
+        activeSide: ship.bank.activeSide,
+        appliedTargetRoll: ship.bank.appliedTargetRoll,
+        neutralizing: ship.bank.seamNeutralizing,
+        seamDistance: ship.bank.seamDistance,
+        loopCycle: ship.bank.loopCycle,
+      });
+    }
+
+    scrollTo(0, max * 0.08);
+    for (let frame = 0; frame < 100; frame++) {
+      await new Promise(requestAnimationFrame);
+      const ship = window.__portfolioShipDebug;
+      result.push({
+        phase: 'release',
+        roll: ship.ship.roll,
+        activeSide: ship.bank.activeSide,
+        appliedTargetRoll: ship.bank.appliedTargetRoll,
+        neutralizing: ship.bank.seamNeutralizing,
+        seamDistance: ship.bank.seamDistance,
+        loopCycle: ship.bank.loopCycle,
+      });
+      if (!ship.bank.seamNeutralizing && ship.bank.seamDistance >= 0.04) break;
+    }
+
+    return { cycleBefore, cycleChanged, result };
+  });
+
+  if (!seam.cycleChanged) throw new Error(`${label}: reloop did not change loopCycle.`);
+  const seamFrames = seam.result.filter(sample => sample.phase === 'seam');
+  const neutralFrames = seam.result.filter(sample => sample.neutralizing);
+  if (neutralFrames.length < 2) {
+    throw new Error(`${label}: bank-neutral reloop state was not exercised.`);
+  }
+  for (const sample of neutralFrames) {
+    if (Math.abs(sample.appliedTargetRoll) > 0.000001 || sample.activeSide !== 0) {
+      throw new Error(`${label}: reloop commanded a side bank instead of level: ${JSON.stringify(sample)}`);
+    }
+  }
+
+  let maxSeamRollStep = 0;
+  for (let index = 1; index < seamFrames.length; index++) {
+    maxSeamRollStep = Math.max(maxSeamRollStep, Math.abs(seamFrames[index].roll - seamFrames[index - 1].roll));
+  }
+  if (maxSeamRollStep > 0.14) {
+    throw new Error(`${label}: reloop still jolts roll: max seam roll step=${maxSeamRollStep}`);
+  }
+
+  const seamSigns = new Set(
+    neutralFrames
+      .filter(sample => Math.abs(sample.roll) > 0.02)
+      .map(sample => Math.sign(sample.roll)),
+  );
+  if (seamSigns.size > 1) {
+    throw new Error(`${label}: reloop rolls right and left while it should only return to center.`);
+  }
+
+  const release = seam.result.find(sample => !sample.neutralizing && sample.phase === 'release');
+  if (!release) throw new Error(`${label}: bank never released after clearing the reloop seam.`);
+  if (release.seamDistance < 0.04 || Math.abs(release.roll) > 0.04) {
+    throw new Error(`${label}: bank released before it was level and clear of the seam: ${JSON.stringify(release)}`);
+  }
+
+  console.log(`[portfolio-ship-bank] ${label} PASS progress=${progressTravel.toFixed(3)} right=${positivePeak.toFixed(3)} left=${negativePeak.toFixed(3)} centerFrames=${centerGateFrames} transitions=${oppositeSideTransitions} maxRollStep=${maxRollStep.toFixed(4)} seamStep=${maxSeamRollStep.toFixed(4)}`);
   await page.close();
 }
 
@@ -141,6 +227,7 @@ try {
   await exercise({ width: 414, height: 896 }, 'mobile-reduced-motion', true);
   console.log('[portfolio-ship-bank] PASS');
   console.log('[portfolio-ship-bank] sequence=bank-right-center-bank-left-center');
+  console.log('[portfolio-ship-bank] reloop=neutral-through-seam-before-resuming-bank');
   console.log('[portfolio-ship-bank] input=signed-route-curvature-only');
   console.log('[portfolio-ship-bank] scope=roll-only-known-good-flight-preserved');
 } finally {

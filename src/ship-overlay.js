@@ -60,10 +60,13 @@ const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
 let poseInitialized = false;
 let activeBankSide = 0;
+let observedLoopCycle = null;
+let bankSeamNeutralizing = false;
 
 const BANK_DEADBAND = 0.035;
 const BANK_CENTER_EPSILON = 0.025;
 const BANK_MAX_ROLL_RATE = 2.2;
+const BANK_SEAM_RELEASE_PROGRESS = 0.04;
 const REDUCED_MOTION_BANK_SCALE = 0.62;
 
 function wrap01(value) {
@@ -105,6 +108,15 @@ function animate(now) {
 
   const progress = state.progress;
   const velocity = state.velocity;
+  const loopCycle = state.loopCycle ?? 0;
+  if (observedLoopCycle === null) {
+    observedLoopCycle = loopCycle;
+  } else if (loopCycle !== observedLoopCycle) {
+    observedLoopCycle = loopCycle;
+    bankSeamNeutralizing = true;
+    activeBankSide = 0;
+  }
+
   const pocket = window.__portfolioTimePocketDebug;
   coastAmount = damp(coastAmount, reducedMotion ? 0 : (pocket?.coastStrength || 0), 4.6, dt);
   timeFieldAmount = damp(timeFieldAmount, reducedMotion ? 0 : (pocket?.timeFieldStrength || 0), 4.0, dt);
@@ -138,22 +150,26 @@ function animate(now) {
   const coastCalm = Math.max(0.18, 1 - coastAmount * 0.45 - timeFieldAmount * 0.36);
   const bankMotionScale = reducedMotion ? REDUCED_MOTION_BANK_SCALE : 1;
 
-  // Roll is turn response only. Scroll speed can change thrust, but it cannot
-  // tell the ship which way to bank. As signed route curvature relaxes, the
-  // bank target naturally returns to level.
   const targetRoll = THREE.MathUtils.clamp(
     turnSignal * 2.55 * coastCalm * bankMotionScale,
     -0.82,
     0.82,
   );
 
-  // Bank is the only presentation behavior changed here. Never swing directly
-  // from one side to the other: ease the current bank back through level first,
-  // then allow the opposite bank to begin. Position, yaw, pitch and camera keep
-  // the established flight response unchanged.
   const requestedBankSide = Math.abs(targetRoll) > BANK_DEADBAND ? Math.sign(targetRoll) : 0;
+  const seamDistance = Math.min(progress, 1 - progress);
   let bankTargetRoll = targetRoll;
-  if (requestedBankSide === 0) {
+
+  if (bankSeamNeutralizing) {
+    bankTargetRoll = 0;
+    activeBankSide = 0;
+    if (
+      seamDistance >= BANK_SEAM_RELEASE_PROGRESS
+      && Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON
+    ) {
+      bankSeamNeutralizing = false;
+    }
+  } else if (requestedBankSide === 0) {
     bankTargetRoll = 0;
     if (Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON) activeBankSide = 0;
   } else if (activeBankSide === 0) {
@@ -170,9 +186,6 @@ function animate(now) {
   ship.rotation.y = dampAngle(ship.rotation.y, yaw, attitudeLambda, dt);
   ship.rotation.x = dampAngle(ship.rotation.x, -pitch * 0.86, attitudeLambda, dt);
 
-  // Keep the familiar exponential ease, but bound only the roll axis so a
-  // sudden change in curvature cannot produce a one-frame bank jolt. This does
-  // not affect route position, yaw, pitch, camera motion, or travel speed.
   const rollLambda = Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount);
   const easedRoll = dampAngle(ship.rotation.z, bankTargetRoll, rollLambda, dt);
   const rollDelta = Math.atan2(
@@ -213,7 +226,7 @@ function animate(now) {
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-flight-centered-bank-v2',
+    motionContract: 'known-good-flight-centered-bank-v3',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -229,6 +242,9 @@ function animate(now) {
       appliedTargetRoll: bankTargetRoll,
       maxRollRate: BANK_MAX_ROLL_RATE,
       reducedMotionScale: bankMotionScale,
+      seamNeutralizing: bankSeamNeutralizing,
+      seamDistance,
+      loopCycle,
     },
     exhaust: 'turbulent-nozzle-rooted-shader-v1',
     engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
