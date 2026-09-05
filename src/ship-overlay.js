@@ -66,6 +66,7 @@ let bankSeamNeutralizing = false;
 const BANK_DEADBAND = 0.035;
 const BANK_CENTER_EPSILON = 0.025;
 const BANK_MAX_ROLL_RATE = 2.2;
+const BANK_SEAM_APPROACH_PROGRESS = 0.10;
 const BANK_SEAM_RELEASE_PROGRESS = 0.04;
 const REDUCED_MOTION_BANK_SCALE = 0.62;
 
@@ -109,10 +110,24 @@ function animate(now) {
   const progress = state.progress;
   const velocity = state.velocity;
   const loopCycle = state.loopCycle ?? 0;
+  const seamDistance = Math.min(progress, 1 - progress);
+  const seamNeutralZone = progress >= 1 - BANK_SEAM_APPROACH_PROGRESS
+    || progress <= BANK_SEAM_RELEASE_PROGRESS;
+
   if (observedLoopCycle === null) {
     observedLoopCycle = loopCycle;
   } else if (loopCycle !== observedLoopCycle) {
     observedLoopCycle = loopCycle;
+    bankSeamNeutralizing = true;
+    activeBankSide = 0;
+  }
+
+  // Begin leveling before the document actually recycles. The chase camera has
+  // a small roll-relative lateral offset, so waiting until loopCycle changes can
+  // make the ship appear to kick sideways as roll is removed after the wrap.
+  // Holding a level corridor from the end of 06 through the beginning of 01
+  // lets both ship roll and camera framing settle before the reloop occurs.
+  if (seamNeutralZone) {
     bankSeamNeutralizing = true;
     activeBankSide = 0;
   }
@@ -157,16 +172,12 @@ function animate(now) {
   );
 
   const requestedBankSide = Math.abs(targetRoll) > BANK_DEADBAND ? Math.sign(targetRoll) : 0;
-  const seamDistance = Math.min(progress, 1 - progress);
   let bankTargetRoll = targetRoll;
 
   if (bankSeamNeutralizing) {
     bankTargetRoll = 0;
     activeBankSide = 0;
-    if (
-      seamDistance >= BANK_SEAM_RELEASE_PROGRESS
-      && Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON
-    ) {
+    if (!seamNeutralZone && Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON) {
       bankSeamNeutralizing = false;
     }
   } else if (requestedBankSide === 0) {
@@ -201,10 +212,11 @@ function animate(now) {
     time: reducedMotion ? 0 : now * 0.001,
   });
 
+  const cameraBankOffset = -ship.rotation.z * 0.92;
   desiredCamera.copy(smoothPos)
     .addScaledVector(smoothTangent, -11.6 - warpAmount * 5.5)
     .addScaledVector(worldUp, 4.5 + warpAmount * 0.8)
-    .addScaledVector(right, -ship.rotation.z * 0.92);
+    .addScaledVector(right, cameraBankOffset);
   const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);
   camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
 
@@ -226,7 +238,7 @@ function animate(now) {
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-flight-centered-bank-v3',
+    motionContract: 'known-good-flight-centered-bank-v4',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -243,6 +255,8 @@ function animate(now) {
       maxRollRate: BANK_MAX_ROLL_RATE,
       reducedMotionScale: bankMotionScale,
       seamNeutralizing: bankSeamNeutralizing,
+      seamNeutralZone,
+      seamApproachProgress: BANK_SEAM_APPROACH_PROGRESS,
       seamDistance,
       loopCycle,
     },
@@ -261,6 +275,7 @@ function animate(now) {
       y: camera.position.y,
       z: camera.position.z,
       fov: camera.fov,
+      bankOffset: cameraBankOffset,
     },
     backgroundRenderer: state.engine,
     movement: state.movement,
