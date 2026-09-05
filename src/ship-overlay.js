@@ -137,14 +137,23 @@ function animate(now) {
     0.82,
   );
 
-  // Smooth only the visual attitude. Quaternion interpolation removes Euler
-  // wrap/jump artifacts without changing where the ship is on the route.
+  // Smooth only the visual attitude. The target can move a long angular
+  // distance after a large scroll input, so cap the rendered quaternion step
+  // instead of taking a fixed fraction of that error in one frame. This keeps
+  // turns continuous while leaving route position and travel speed untouched.
   smoothRoll = dampAngle(smoothRoll, targetRoll, reducedMotion ? 20 : 15, dt);
   targetEuler.set(-pitch * 0.86, yaw, smoothRoll, ship.rotation.order);
   targetQuaternion.setFromEuler(targetEuler);
-  const attitudeBlend = 1 - Math.exp(-(reducedMotion ? 24 : 18) * dt);
-  if (!poseInitialized) ship.quaternion.copy(targetQuaternion);
-  else ship.quaternion.slerp(targetQuaternion, attitudeBlend);
+  if (!poseInitialized) {
+    ship.quaternion.copy(targetQuaternion);
+  } else {
+    const attitudeErrorBeforeStep = ship.quaternion.angleTo(targetQuaternion);
+    const maxAttitudeStep = Math.min(0.18, (reducedMotion ? 10 : 12) * dt);
+    const attitudeBlend = attitudeErrorBeforeStep > 0.000001
+      ? Math.min(1, maxAttitudeStep / attitudeErrorBeforeStep)
+      : 1;
+    ship.quaternion.slerp(targetQuaternion, attitudeBlend);
+  }
 
   setShipEngineState(ship, {
     thrust: warpAmount,
