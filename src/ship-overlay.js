@@ -60,10 +60,13 @@ const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
 let poseInitialized = false;
 let activeBankSide = 0;
+let observedLoopCycle = null;
+let bankSeamNeutralizing = false;
 
 const BANK_DEADBAND = 0.035;
 const BANK_CENTER_EPSILON = 0.025;
 const BANK_MAX_ROLL_RATE = 2.2;
+const BANK_SEAM_RELEASE_PROGRESS = 0.04;
 const REDUCED_MOTION_BANK_SCALE = 0.62;
 
 function wrap01(value) {
@@ -105,6 +108,15 @@ function animate(now) {
 
   const progress = state.progress;
   const velocity = state.velocity;
+  const loopCycle = state.loopCycle ?? 0;
+  if (observedLoopCycle === null) {
+    observedLoopCycle = loopCycle;
+  } else if (loopCycle !== observedLoopCycle) {
+    observedLoopCycle = loopCycle;
+    bankSeamNeutralizing = true;
+    activeBankSide = 0;
+  }
+
   const pocket = window.__portfolioTimePocketDebug;
   coastAmount = damp(coastAmount, reducedMotion ? 0 : (pocket?.coastStrength || 0), 4.6, dt);
   timeFieldAmount = damp(timeFieldAmount, reducedMotion ? 0 : (pocket?.timeFieldStrength || 0), 4.0, dt);
@@ -152,8 +164,23 @@ function animate(now) {
   // then allow the opposite bank to begin. Position, yaw, pitch and camera keep
   // the established flight response unchanged.
   const requestedBankSide = Math.abs(targetRoll) > BANK_DEADBAND ? Math.sign(targetRoll) : 0;
+  const seamDistance = Math.min(progress, 1 - progress);
   let bankTargetRoll = targetRoll;
-  if (requestedBankSide === 0) {
+
+  // recycleScroll keeps travel continuous but intentionally wraps progress at
+  // the document seam. Treat that wrap as transport, not as a real turn input.
+  // Hold only roll at level until the ship has crossed the seam, returned to
+  // center, and moved a short distance into the next cycle.
+  if (bankSeamNeutralizing) {
+    bankTargetRoll = 0;
+    activeBankSide = 0;
+    if (
+      seamDistance >= BANK_SEAM_RELEASE_PROGRESS
+      && Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON
+    ) {
+      bankSeamNeutralizing = false;
+    }
+  } else if (requestedBankSide === 0) {
     bankTargetRoll = 0;
     if (Math.abs(ship.rotation.z) <= BANK_CENTER_EPSILON) activeBankSide = 0;
   } else if (activeBankSide === 0) {
@@ -213,7 +240,7 @@ function animate(now) {
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-flight-centered-bank-v2',
+    motionContract: 'known-good-flight-centered-bank-v3',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -229,6 +256,9 @@ function animate(now) {
       appliedTargetRoll: bankTargetRoll,
       maxRollRate: BANK_MAX_ROLL_RATE,
       reducedMotionScale: bankMotionScale,
+      seamNeutralizing: bankSeamNeutralizing,
+      seamDistance,
+      loopCycle,
     },
     exhaust: 'turbulent-nozzle-rooted-shader-v1',
     engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
