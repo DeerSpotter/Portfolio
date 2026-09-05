@@ -27,6 +27,7 @@ for (const required of [
   'const cameraBankOffset = -ship.rotation.z * 0.92;',
   'blendForwardDirection(cameraForward, smoothTangent, shipForward, cameraSeamBlend);',
   'shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();',
+  "forwardBlend: 'wrapped-yaw-pitch'",
   'screenX: shipScreenX',
   'distanceToShip: cameraDistanceToShip',
   'requestedBankSide !== activeBankSide',
