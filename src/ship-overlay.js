@@ -145,9 +145,8 @@ function animate(now) {
     activeBankSide = 0;
   }
 
-  // Begin leveling before the document actually recycles. The chase camera has
-  // a small roll-relative lateral offset, so waiting until loopCycle changes can
-  // make the ship appear to kick sideways as roll is removed after the wrap.
+  // Begin leveling before the document actually recycles. This keeps banking
+  // from adding another lateral cue while the 06 -> 01 camera seam is active.
   if (seamNeutralZone) {
     bankSeamNeutralizing = true;
     activeBankSide = 0;
@@ -233,14 +232,14 @@ function animate(now) {
     time: reducedMotion ? 0 : now * 0.001,
   });
 
-  // The closed route doubles back at the 06 -> 01 join. The raw tangent can
-  // therefore reverse almost 180 degrees in a very short progress interval.
-  // Normalized vector lerp is intentionally retained as the established route
-  // presentation everywhere else, but it is not a safe chase-camera basis for
-  // that antipodal seam. During the seam corridor, blend the camera onto the
-  // ship's already-rendered forward direction. The body yaw is angle-damped,
-  // so the camera remains attached behind the visible ship instead of jumping
-  // from one side of it to the other when the route tangent reverses.
+  // The supplied video shows the real problem: the closed route doubles back
+  // immediately before 06 -> 01, so its tangent reverses almost 180 degrees.
+  // A chase camera built directly from that antipodal tangent swaps its behind
+  // point from one side of the ship to the other and makes the ship appear to
+  // launch across the viewport. Do not rewrite the route. Instead, only in this
+  // seam corridor, attach the camera basis to the already rendered ship body.
+  // The body's yaw/pitch are angle-damped, so the camera follows the visible
+  // vehicle continuously while the bookkeeping route direction reverses.
   shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
   const cameraSeamBlend = seamCameraBlend(progress);
   cameraForward.copy(smoothTangent).lerp(shipForward, cameraSeamBlend).normalize();
