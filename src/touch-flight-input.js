@@ -1,10 +1,12 @@
 // Touch devices do not emit the wheel-edge gesture used by desktop flight.
-// Keep touch interpretation separate from loop state: this adapter reports a
-// semantic flight-loop intent, while canvas-flight remains the single owner of
+// Keep touch interpretation separate from flight state: this adapter reports
+// semantic touch travel while canvas-flight remains the single owner of
 // loopCycle, scroll recycling, travel continuity, and telemetry.
 const EDGE_PX = 3;
 const MIN_GESTURE_PX = 18;
+const VIRTUAL_ENTRY_PROGRESS = 0.93;
 const LOOP_INTENT_EVENT = 'portfolio-flight-loop-intent';
+const VIRTUAL_TRAVEL_EVENT = 'portfolio-flight-virtual-touch';
 const BLOCKED_SWIPE_SELECTOR = 'dialog, button, a, input, textarea, select, [contenteditable="true"]';
 
 let startY = null;
@@ -12,6 +14,7 @@ let lastY = null;
 let travelY = 0;
 let blocked = false;
 let deliveredDuringGesture = false;
+let virtualTravelActive = false;
 
 function resetGesture() {
   startY = null;
@@ -19,10 +22,19 @@ function resetGesture() {
   travelY = 0;
   blocked = false;
   deliveredDuringGesture = false;
+  virtualTravelActive = false;
+}
+
+function scrollMetrics() {
+  const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  return {
+    maxScroll,
+    local: Math.max(0, Math.min(1, scrollY / maxScroll)),
+  };
 }
 
 function documentEdge(direction) {
-  const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const { maxScroll } = scrollMetrics();
   if (direction > 0) return scrollY >= maxScroll - EDGE_PX;
   if (direction < 0) return scrollY <= EDGE_PX;
   return false;
@@ -32,6 +44,23 @@ function sendLoopIntent(direction) {
   dispatchEvent(new CustomEvent(LOOP_INTENT_EVENT, {
     detail: { direction },
   }));
+}
+
+function sendVirtualTravel(phase, deltaProgress = 0) {
+  dispatchEvent(new CustomEvent(VIRTUAL_TRAVEL_EVENT, {
+    detail: { phase, deltaProgress },
+  }));
+}
+
+function beginVirtualTravel(deltaY) {
+  const { maxScroll, local } = scrollMetrics();
+  if (virtualTravelActive || deltaY <= 0 || local < VIRTUAL_ENTRY_PROGRESS) return false;
+
+  virtualTravelActive = true;
+  deliveredDuringGesture = true;
+  sendVirtualTravel('begin');
+  sendVirtualTravel('delta', deltaY / maxScroll);
+  return true;
 }
 
 function deliverActiveGesture() {
@@ -51,9 +80,8 @@ function deliverCompletedGesture(direction) {
     return;
   }
 
-  // Mobile Safari can finish updating scrollY after touchend has fired. Check
-  // once on the next frame as a fallback, but do not make release the primary
-  // loop trigger. The active touchmove path above handles the normal case.
+  // Mobile Safari can finish updating scrollY after touchend has fired. Keep a
+  // one-frame fallback for gestures that never entered virtual seam travel.
   requestAnimationFrame(() => {
     if (documentEdge(direction)) sendLoopIntent(direction);
   });
@@ -67,18 +95,42 @@ addEventListener('touchstart', event => {
   lastY = touch.clientY;
   travelY = 0;
   deliveredDuringGesture = false;
+  virtualTravelActive = false;
 }, { passive: true });
 
 addEventListener('touchmove', event => {
   if (blocked) return;
   const touch = event.touches[0];
   if (!touch || lastY === null) return;
-  travelY += lastY - touch.clientY;
+
+  const deltaY = lastY - touch.clientY;
   lastY = touch.clientY;
+  travelY += deltaY;
+
+  if (virtualTravelActive) {
+    event.preventDefault();
+    const { maxScroll } = scrollMetrics();
+    sendVirtualTravel('delta', deltaY / maxScroll);
+    return;
+  }
+
+  if (travelY >= MIN_GESTURE_PX && beginVirtualTravel(deltaY)) {
+    // Capture the gesture before Safari reaches the physical document edge.
+    // From here until release, canvas-flight owns travel and scrollY stays put.
+    event.preventDefault();
+    return;
+  }
+
   deliverActiveGesture();
-}, { passive: true });
+}, { passive: false });
 
 addEventListener('touchend', () => {
+  if (virtualTravelActive) {
+    sendVirtualTravel('end');
+    resetGesture();
+    return;
+  }
+
   if (blocked || startY === null || deliveredDuringGesture || Math.abs(travelY) < MIN_GESTURE_PX) {
     resetGesture();
     return;
@@ -89,12 +141,16 @@ addEventListener('touchend', () => {
   deliverCompletedGesture(direction);
 }, { passive: true });
 
-addEventListener('touchcancel', resetGesture, { passive: true });
+addEventListener('touchcancel', () => {
+  if (virtualTravelActive) sendVirtualTravel('cancel');
+  resetGesture();
+}, { passive: true });
 
 window.__portfolioTouchFlightDebug = {
-  contract: 'touch-edge-to-flight-loop-v3',
+  contract: 'touch-edge-to-flight-loop-v4',
   edgePx: EDGE_PX,
   minimumGesturePx: MIN_GESTURE_PX,
-  delivery: 'active-gesture-edge-intent-with-touchend-fallback',
+  virtualEntryProgress: VIRTUAL_ENTRY_PROGRESS,
+  delivery: 'pre-edge-virtual-travel-with-edge-fallback',
   blockedSelector: BLOCKED_SWIPE_SELECTOR,
 };
