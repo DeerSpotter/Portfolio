@@ -1,7 +1,11 @@
 /* Desktop flight billboard. The existing .detail element is transformed into
    world-space content instead of duplicating or covering it with another card. */
+.billboard-smoke-field { display: none; }
+
 @media (min-width: 901px) {
   #hud { perspective: 1400px; }
+  .hud-top,
+  .hud-bottom { position: relative; z-index: 4; }
 
   #world {
     transition: filter 420ms ease;
@@ -9,6 +13,175 @@
 
   body[data-flight-mode='time-pocket'] #world {
     filter: saturate(.90) contrast(.97) brightness(1.018);
+  }
+
+  .billboard-smoke-field {
+    --smoke-x: 50vw;
+    --smoke-y: 50vh;
+    --smoke-scale: .18;
+    --smoke-yaw: 0deg;
+    --smoke-roll: 0deg;
+    --smoke-skew: 0deg;
+    --smoke-strength: .04;
+    --smoke-alpha: .03;
+    --smoke-drift-small: 8px;
+    --smoke-drift-large: 18px;
+    --smoke-rise: 8px;
+    --smoke-stretch: 1;
+    --smoke-time-field: 0;
+    --smoke-halo-opacity: .12;
+    --smoke-core-opacity: .10;
+    --smoke-plume-opacity: .12;
+    --smoke-soft-opacity: .08;
+
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: min(560px, 40vw);
+    height: min(440px, 54vh);
+    pointer-events: none;
+    z-index: 1;
+    opacity: var(--smoke-alpha);
+    transform-origin: 50% 50%;
+    transform:
+      translate3d(var(--smoke-x), var(--smoke-y), 0)
+      translate(-50%, -50%)
+      perspective(900px)
+      rotateY(var(--smoke-yaw))
+      rotateZ(var(--smoke-roll))
+      skewY(var(--smoke-skew))
+      scale(var(--smoke-scale));
+    will-change: transform, opacity;
+    mix-blend-mode: multiply;
+  }
+
+  .billboard-smoke-field::before,
+  .billboard-smoke-field::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    border-radius: 46% 54% 58% 42% / 52% 42% 58% 48%;
+  }
+
+  /* Broad charcoal haze frames the card but leaves its reading area clear. */
+  .billboard-smoke-field::before {
+    inset: 3% -4% 1% -4%;
+    background:
+      radial-gradient(ellipse at 8% 54%, rgba(4, 5, 6, .62) 0 8%, rgba(35, 37, 39, .40) 24%, rgba(105, 107, 106, .14) 45%, transparent 67%),
+      radial-gradient(ellipse at 91% 42%, rgba(2, 3, 4, .56) 0 7%, rgba(48, 50, 51, .36) 23%, rgba(132, 132, 128, .12) 46%, transparent 69%),
+      radial-gradient(ellipse at 26% 91%, rgba(8, 9, 10, .50) 0 8%, rgba(63, 64, 65, .30) 27%, transparent 62%),
+      radial-gradient(ellipse at 75% 88%, rgba(8, 9, 10, .44) 0 7%, rgba(74, 75, 75, .25) 25%, transparent 60%);
+    filter: blur(18px);
+    opacity: var(--smoke-halo-opacity);
+    -webkit-mask-image: radial-gradient(ellipse at center, transparent 0 31%, rgba(0,0,0,.28) 43%, #000 69%);
+    mask-image: radial-gradient(ellipse at center, transparent 0 31%, rgba(0,0,0,.28) 43%, #000 69%);
+    animation: smoke-halo-breathe 3.8s ease-in-out infinite;
+  }
+
+  /* This darker tongue makes the smoke feel flame-like without introducing
+     orange fire; it trails toward the vanishing-point side during a pass. */
+  .billboard-smoke-field::after {
+    width: 58%;
+    height: 42%;
+    left: 21%;
+    top: 31%;
+    background:
+      radial-gradient(ellipse at 48% 72%, rgba(0, 0, 0, .62) 0 14%, rgba(31, 33, 35, .42) 30%, rgba(91, 93, 93, .18) 51%, transparent 72%),
+      radial-gradient(ellipse at 30% 45%, rgba(20, 21, 22, .46), transparent 60%);
+    filter: blur(12px);
+    opacity: var(--smoke-core-opacity);
+    animation: smoke-core-flame 2.9s ease-in-out infinite;
+  }
+
+  .billboard-smoke-plume {
+    position: absolute;
+    display: block;
+    width: 35%;
+    height: 23%;
+    border-radius: 48% 52% 65% 35% / 70% 38% 62% 30%;
+    background:
+      radial-gradient(ellipse at 46% 69%, rgba(1, 2, 3, .72) 0 12%, rgba(38, 40, 42, .47) 31%, rgba(92, 94, 94, .22) 52%, rgba(155, 155, 150, .07) 64%, transparent 75%);
+    filter: blur(8px);
+    opacity: var(--smoke-plume-opacity);
+    transform-origin: 50% 72%;
+    will-change: transform, opacity;
+  }
+
+  .billboard-smoke-plume::after {
+    content: '';
+    position: absolute;
+    inset: 22% 20% 8% 18%;
+    border-radius: inherit;
+    background: radial-gradient(ellipse at 50% 72%, rgba(5,6,7,.52), rgba(76,78,79,.20) 48%, transparent 73%);
+    filter: blur(5px);
+  }
+
+  .plume-1 { left: -4%; top: 8%; width: 38%; height: 31%; animation: smoke-flame-a 3.5s ease-in-out -1.2s infinite; }
+  .plume-2 { right: -7%; top: 12%; width: 42%; height: 29%; animation: smoke-flame-b 4.1s ease-in-out -.7s infinite; }
+  .plume-3 { left: -10%; bottom: 7%; width: 43%; height: 34%; animation: smoke-flame-b 3.8s ease-in-out -2.2s infinite reverse; }
+  .plume-4 { right: -10%; bottom: 4%; width: 39%; height: 33%; animation: smoke-flame-a 4.4s ease-in-out -1.8s infinite reverse; }
+  .plume-5 { left: 18%; top: -8%; width: 35%; height: 28%; animation: smoke-flame-c 4.8s ease-in-out -2.7s infinite; }
+  .plume-6 { right: 15%; bottom: -11%; width: 34%; height: 28%; animation: smoke-flame-c 4.2s ease-in-out -1.4s infinite reverse; }
+  .plume-7 { left: 34%; top: 4%; width: 31%; height: 24%; opacity: var(--smoke-soft-opacity); animation: smoke-flame-a 5.1s ease-in-out -3.1s infinite; }
+
+  .billboard-smoke-field[data-smoke-state='distant'] {
+    --smoke-halo-opacity: .12;
+    --smoke-core-opacity: .07;
+    --smoke-plume-opacity: .08;
+    --smoke-soft-opacity: .05;
+    filter: blur(1.4px);
+  }
+
+  .billboard-smoke-field[data-smoke-state='approaching'] {
+    --smoke-halo-opacity: .38;
+    --smoke-core-opacity: .28;
+    --smoke-plume-opacity: .32;
+    --smoke-soft-opacity: .22;
+    filter: blur(.8px);
+  }
+
+  .billboard-smoke-field[data-smoke-state='arming'] {
+    --smoke-halo-opacity: .68;
+    --smoke-core-opacity: .57;
+    --smoke-plume-opacity: .62;
+    --smoke-soft-opacity: .38;
+    filter: contrast(1.04);
+  }
+
+  .billboard-smoke-field[data-smoke-state='active'] {
+    --smoke-halo-opacity: .90;
+    --smoke-core-opacity: .78;
+    --smoke-plume-opacity: .74;
+    --smoke-soft-opacity: .46;
+    filter: contrast(1.10);
+  }
+
+  .billboard-smoke-field[data-smoke-state='active'][data-time-pocket='true'] {
+    --smoke-halo-opacity: .96;
+    --smoke-core-opacity: .84;
+    --smoke-plume-opacity: .78;
+  }
+
+  .billboard-smoke-field[data-smoke-state='active'][data-time-pocket='true']::before {
+    filter: blur(22px);
+    animation-duration: 5.2s;
+  }
+
+  .billboard-smoke-field[data-interaction-hold='true'] .billboard-smoke-plume {
+    animation-duration: 5.5s;
+  }
+
+  .billboard-smoke-field[data-smoke-state='passing'] {
+    --smoke-halo-opacity: .54;
+    --smoke-core-opacity: .43;
+    --smoke-plume-opacity: .40;
+    --smoke-soft-opacity: .26;
+  }
+
+  .billboard-smoke-field[data-smoke-state='passing']::after,
+  .billboard-smoke-field[data-smoke-state='passing'] .billboard-smoke-plume {
+    filter: blur(10px);
   }
 
   .detail {
@@ -27,6 +200,7 @@
     position: absolute;
     left: 0;
     top: 0;
+    z-index: 2;
     align-self: auto;
     justify-self: auto;
     width: min(430px, 31vw);
@@ -129,6 +303,36 @@
     cursor: default;
   }
 
+  @keyframes smoke-halo-breathe {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(.96); }
+    45% { transform: translate3d(var(--smoke-drift-small), -14px, 0) scale(1.04); }
+    72% { transform: translate3d(var(--smoke-drift-small), 2px, 0) scale(1.01); }
+  }
+
+  @keyframes smoke-core-flame {
+    0%, 100% { transform: translate3d(0, 0, 0) scaleX(.82) scaleY(.90); }
+    42% { transform: translate3d(var(--smoke-drift-small), -18px, 0) scaleX(var(--smoke-stretch)) scaleY(1.12); }
+    76% { transform: translate3d(var(--smoke-drift-large), -4px, 0) scaleX(1.12) scaleY(.94); }
+  }
+
+  @keyframes smoke-flame-a {
+    0%, 100% { transform: translate3d(0, 2px, 0) rotate(-7deg) scale(.88, .84); }
+    36% { transform: translate3d(var(--smoke-drift-small), -18px, 0) rotate(6deg) scale(1.05, 1.17); }
+    72% { transform: translate3d(var(--smoke-drift-large), -3px, 0) rotate(-3deg) scale(var(--smoke-stretch), .98); }
+  }
+
+  @keyframes smoke-flame-b {
+    0%, 100% { transform: translate3d(0, -1px, 0) rotate(8deg) scale(.92, .88); }
+    40% { transform: translate3d(var(--smoke-drift-small), -4px, 0) rotate(-5deg) scale(1.09, 1.12); }
+    78% { transform: translate3d(var(--smoke-drift-large), -20px, 0) rotate(4deg) scale(var(--smoke-stretch), 1.02); }
+  }
+
+  @keyframes smoke-flame-c {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(-2deg) scale(.86, .82); opacity: .54; }
+    48% { transform: translate3d(var(--smoke-drift-small), -17px, 0) rotate(9deg) scale(1.03, 1.20); opacity: .82; }
+    80% { transform: translate3d(var(--smoke-drift-large), -2px, 0) rotate(-7deg) scale(1.14, .95); opacity: .62; }
+  }
+
   @keyframes billboard-arm {
     0%, 100% { filter: contrast(1.04) saturate(1.07) brightness(1.01); }
     50% { filter: contrast(1.09) saturate(1.14) brightness(1.06); }
@@ -149,7 +353,10 @@
   #world { transition: none; }
   body[data-flight-mode='time-pocket'] #world { filter: none; }
   .detail,
-  .detail::after {
+  .detail::after,
+  .billboard-smoke-field::before,
+  .billboard-smoke-field::after,
+  .billboard-smoke-plume {
     animation: none !important;
   }
 }
