@@ -50,6 +50,10 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function usesMobileDepthMotion() {
+  return matchMedia('(max-width: 800px), (max-width: 900px) and (max-height: 600px)').matches;
+}
+
 function textElement(tag, className, text) {
   const element = document.createElement(tag);
   if (className) element.className = className;
@@ -173,7 +177,7 @@ function assignLayers(desired) {
 
 function poseForDistance(distance, stageIndex) {
   const side = stageIndex % 2 === 0 ? -1 : 1;
-  if (reducedMotion) {
+  if (reducedMotion && !usesMobileDepthMotion()) {
     return { scale: 1, x: 0, y: 0, yaw: 0, opacity: Math.abs(distance) < 0.52 ? 1 : 0, blur: 0 };
   }
   if (distance >= 0) {
@@ -224,7 +228,7 @@ function beginDeparture() {
   dialog.dataset.departing = 'true';
   cue.textContent = 'Departing to flight';
   window.__portfolioDestinationDebug = { ...window.__portfolioDestinationDebug, departure: true };
-  const delay = reducedMotion ? 0 : 360;
+  const delay = reducedMotion && !usesMobileDepthMotion() ? 0 : 360;
   departureTimer = window.setTimeout(() => {
     departureTimer = 0;
     if (dialog.open) dialog.close('flight-complete');
