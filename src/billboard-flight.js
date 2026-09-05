@@ -102,8 +102,6 @@ function project(stop, progress, coastStrength) {
   else if (t >= 0.61) state = 'arming';
   else if (t >= 0.34) state = 'approaching';
 
-  // A time pocket holds the readable billboard in an active-feeling state as
-  // the ship crawls past it, without freezing the flight.
   if (coastStrength > 0.55 && rel > -0.045 && rel < 0.065) state = 'active';
 
   return {
@@ -139,6 +137,7 @@ function render() {
 
   const pocket = window.__portfolioTimePocketDebug;
   const coastStrength = reducedMotion ? 0 : (pocket?.coastStrength || 0);
+  const timeFieldStrength = reducedMotion ? 0 : (pocket?.timeFieldStrength || 0);
   const stop = chooseStop(debug.progress, debug.activeStop);
   const screen = project(stop, debug.progress, coastStrength);
 
@@ -158,6 +157,7 @@ function render() {
   billboard.style.setProperty('--billboard-color', stop.color);
   billboard.style.setProperty('--billboard-side', screen.side.toFixed(3));
   billboard.style.setProperty('--coast-strength', coastStrength.toFixed(3));
+  billboard.style.setProperty('--time-field', timeFieldStrength.toFixed(3));
   billboard.dataset.timePocket = coastStrength > 0.45 ? 'true' : 'false';
 
   if (screen.state !== lastState) {
@@ -182,6 +182,7 @@ function render() {
     roll: screen.roll,
     skew: screen.skew,
     coastStrength,
+    timeFieldStrength,
     contract: 'approaching-skewed-interactive-billboard-v2',
   };
 
