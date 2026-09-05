@@ -56,8 +56,12 @@ const tangent = new THREE.Vector3();
 const smoothTangent = new THREE.Vector3(0, 0, -1);
 const curvatureProbe = new THREE.Vector3();
 const right = new THREE.Vector3();
+const shipForward = new THREE.Vector3();
+const cameraForward = new THREE.Vector3();
+const cameraRight = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
+const shipScreenProbe = new THREE.Vector3();
 let poseInitialized = false;
 let activeBankSide = 0;
 let observedLoopCycle = null;
@@ -68,6 +72,10 @@ const BANK_CENTER_EPSILON = 0.025;
 const BANK_MAX_ROLL_RATE = 2.2;
 const BANK_SEAM_APPROACH_PROGRESS = 0.10;
 const BANK_SEAM_RELEASE_PROGRESS = 0.04;
+const SHIP_SEAM_CAMERA_BLEND_IN = 0.82;
+const SHIP_SEAM_CAMERA_LOCK_PROGRESS = 0.90;
+const SHIP_SEAM_CAMERA_RELEASE_PROGRESS = 0.04;
+const SHIP_SEAM_CAMERA_BLEND_OUT = 0.10;
 const REDUCED_MOTION_BANK_SCALE = 0.62;
 
 function wrap01(value) {
@@ -78,6 +86,11 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function smoothstep(edge0, edge1, value) {
+  const t = clamp((value - edge0) / Math.max(0.000001, edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 function damp(current, target, lambda, dt) {
   return THREE.MathUtils.lerp(current, target, 1 - Math.exp(-lambda * dt));
 }
@@ -85,6 +98,16 @@ function damp(current, target, lambda, dt) {
 function dampAngle(current, target, lambda, dt) {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + delta * (1 - Math.exp(-lambda * dt));
+}
+
+function seamCameraBlend(progress) {
+  if (progress >= SHIP_SEAM_CAMERA_BLEND_IN) {
+    return smoothstep(SHIP_SEAM_CAMERA_BLEND_IN, SHIP_SEAM_CAMERA_LOCK_PROGRESS, progress);
+  }
+  if (progress <= SHIP_SEAM_CAMERA_BLEND_OUT) {
+    return 1 - smoothstep(SHIP_SEAM_CAMERA_RELEASE_PROGRESS, SHIP_SEAM_CAMERA_BLEND_OUT, progress);
+  }
+  return 0;
 }
 
 let lastTime = performance.now();
@@ -125,8 +148,6 @@ function animate(now) {
   // Begin leveling before the document actually recycles. The chase camera has
   // a small roll-relative lateral offset, so waiting until loopCycle changes can
   // make the ship appear to kick sideways as roll is removed after the wrap.
-  // Holding a level corridor from the end of 06 through the beginning of 01
-  // lets both ship roll and camera framing settle before the reloop occurs.
   if (seamNeutralZone) {
     bankSeamNeutralizing = true;
     activeBankSide = 0;
@@ -212,16 +233,30 @@ function animate(now) {
     time: reducedMotion ? 0 : now * 0.001,
   });
 
+  // The closed route doubles back at the 06 -> 01 join. The raw tangent can
+  // therefore reverse almost 180 degrees in a very short progress interval.
+  // Normalized vector lerp is intentionally retained as the established route
+  // presentation everywhere else, but it is not a safe chase-camera basis for
+  // that antipodal seam. During the seam corridor, blend the camera onto the
+  // ship's already-rendered forward direction. The body yaw is angle-damped,
+  // so the camera remains attached behind the visible ship instead of jumping
+  // from one side of it to the other when the route tangent reverses.
+  shipForward.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
+  const cameraSeamBlend = seamCameraBlend(progress);
+  cameraForward.copy(smoothTangent).lerp(shipForward, cameraSeamBlend).normalize();
+  cameraRight.crossVectors(cameraForward, worldUp).normalize();
+  if (cameraRight.lengthSq() < 0.001) cameraRight.set(1, 0, 0);
+
   const cameraBankOffset = -ship.rotation.z * 0.92;
   desiredCamera.copy(smoothPos)
-    .addScaledVector(smoothTangent, -11.6 - warpAmount * 5.5)
+    .addScaledVector(cameraForward, -11.6 - warpAmount * 5.5)
     .addScaledVector(worldUp, 4.5 + warpAmount * 0.8)
-    .addScaledVector(right, cameraBankOffset);
+    .addScaledVector(cameraRight, cameraBankOffset);
   const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);
   camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
 
   desiredLook.copy(smoothPos)
-    .addScaledVector(smoothTangent, 13.5 + warpAmount * 12)
+    .addScaledVector(cameraForward, 13.5 + warpAmount * 12)
     .addScaledVector(worldUp, 0.35);
   camera.lookAt(desiredLook);
 
@@ -232,13 +267,18 @@ function animate(now) {
     camera.updateProjectionMatrix();
   }
 
+  shipScreenProbe.copy(ship.position).project(camera);
+  const shipScreenX = (shipScreenProbe.x * 0.5 + 0.5) * window.innerWidth;
+  const shipScreenY = (-shipScreenProbe.y * 0.5 + 0.5) * window.innerHeight;
+  const cameraDistanceToShip = camera.position.distanceTo(ship.position);
+
   window.__portfolioShipDebug = {
     ready: true,
     engine: 'three-overlay',
     model: 'documented-procedural-stub-v2',
     quality: 'high',
     flightContract: 'original-live3d-third-person-chase',
-    motionContract: 'known-good-flight-centered-bank-v4',
+    motionContract: 'known-good-flight-centered-bank-v5',
     cameraType: 'perspective',
     progress,
     velocity,
@@ -269,6 +309,8 @@ function animate(now) {
       pitch: ship.rotation.x,
       yaw: ship.rotation.y,
       roll: ship.rotation.z,
+      screenX: shipScreenX,
+      screenY: shipScreenY,
     },
     camera: {
       x: camera.position.x,
@@ -276,6 +318,8 @@ function animate(now) {
       z: camera.position.z,
       fov: camera.fov,
       bankOffset: cameraBankOffset,
+      seamBlend: cameraSeamBlend,
+      distanceToShip: cameraDistanceToShip,
     },
     backgroundRenderer: state.engine,
     movement: state.movement,
