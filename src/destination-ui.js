@@ -3,12 +3,12 @@ import { destinations, createDestinationScene } from './destination-scenes.js';
 const dialog = document.createElement('dialog');
 dialog.id = 'destination';
 dialog.setAttribute('aria-labelledby', 'destinationTitle');
-dialog.innerHTML = `<canvas class="destination-scene" aria-hidden="true"></canvas>
-  <div class="destination-layout">
-    <header class="destination-header"><p class="eyebrow" id="destinationLocation"></p>
+dialog.innerHTML = `<div class="destination-layout">
+    <header class="destination-header"><div class="destination-ident"><span class="destination-monogram" aria-hidden="true">MT</span><div><p class="eyebrow" id="destinationLocation"></p><p class="destination-subline">Maxim Teleguz / Project systems</p></div></div>
     <form method="dialog"><button class="close-button" aria-label="Close destination and return to flight">Return to flight <span aria-hidden="true">×</span></button></form></header>
-    <div class="destination-reading"><p class="destination-place"></p><h2 id="destinationTitle" tabindex="-1"></h2>
-    <article class="destination-content"></article></div>
+    <section class="destination-hero"><div class="destination-heading"><p class="destination-place"></p><h2 id="destinationTitle" tabindex="-1"></h2></div>
+    <div class="destination-view"><canvas class="destination-scene" aria-hidden="true"></canvas><span class="destination-view-label" aria-hidden="true"></span></div></section>
+    <article class="destination-content"></article>
   </div>`;
 document.body.append(dialog);
 const scene = createDestinationScene(dialog.querySelector('canvas'));
@@ -23,6 +23,7 @@ export function openDestination(section, trigger) {
   dialog.style.setProperty('--destination-accent', config.accent);
   dialog.querySelector('#destinationLocation').textContent = config.name;
   dialog.querySelector('.destination-place').textContent = config.place;
+  dialog.querySelector('.destination-view-label').textContent = config.name;
   const copy = source.cloneNode(true);
   // Remap copied IDs and references so the full hiring brief stays valid.
   for (const element of [copy, ...copy.querySelectorAll('[id]')]) {

@@ -17,6 +17,7 @@ let lastState = '';
 let interactionHold = null;
 let interactionHoldUntil = 0;
 let interactionHoldConsumedStop = null;
+let releasePose = null;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -151,6 +152,7 @@ function heldScreen(stop, screen, pocket, timeFieldStrength, now) {
     && timeFieldStrength >= INTERACTION_FIELD_THRESHOLD;
 
   if (!inInteractionZone) {
+    if (interactionHold) releasePose = { ...interactionHold, started: now };
     interactionHold = null;
     interactionHoldUntil = 0;
     if (interactionHoldConsumedStop !== stop.title) interactionHoldConsumedStop = null;
@@ -169,6 +171,7 @@ function heldScreen(stop, screen, pocket, timeFieldStrength, now) {
   if (focusInside) interactionHoldUntil = Math.max(interactionHoldUntil, now + 350);
 
   if (now >= interactionHoldUntil && !focusInside) {
+    releasePose = { ...interactionHold, started: now };
     interactionHold = null;
     return { screen, held: false };
   }
@@ -207,11 +210,23 @@ function render(now = performance.now()) {
   const stop = chooseStop(debug.progress, debug.activeStop);
   const projected = project(stop, debug.progress, coastStrength);
   const hold = heldScreen(stop, projected, pocket, timeFieldStrength, now);
-  const screen = hold.screen;
+  const screen = { ...hold.screen };
+  if (releasePose && !hold.held && releasePose.stopTitle === stop.title) {
+    const remaining = Math.exp(-(now - releasePose.started) / 180);
+    for (const key of ['x', 'y', 'scale', 'yaw', 'roll', 'skew']) {
+      screen[key] += (releasePose[key] - screen[key]) * remaining;
+    }
+    if (remaining < .001) releasePose = null;
+  } else if (hold.held || releasePose?.stopTitle !== stop.title) releasePose = null;
+  // Give the text and both effect planes exactly the same numeric pose.
+  for (const key of ['x', 'y', 'scale', 'yaw', 'roll', 'skew']) {
+    screen[key] = Number(screen[key].toFixed(key === 'scale' ? 4 : 2));
+  }
 
   if (stop !== displayed) {
     displayed = stop;
     showWaypoint(stop);
+    billboard.dataset.waypoint = stop.section;
   }
 
   billboard.style.setProperty('--billboard-x', `${screen.x.toFixed(2)}px`);

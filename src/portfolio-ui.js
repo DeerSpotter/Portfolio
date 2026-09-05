@@ -13,33 +13,9 @@ const action = document.getElementById('detailAction');
 let displayed = -1;
 let returnFocus = null;
 
-function wrap01(value) {
-  return ((value % 1) + 1) % 1;
-}
-
-function wrapSigned(value) {
-  let wrapped = wrap01(value);
-  if (wrapped > 0.5) wrapped -= 1;
-  return wrapped;
-}
-
-function stopForCurrentScroll() {
-  const maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
-  const progress = scrollY / maxScroll;
-  return waypoints.reduce((best, stop) => {
-    const distance = Math.abs(wrapSigned(stop.at - progress));
-    return !best || distance < best.distance ? { stop, distance } : best;
-  }, null).stop;
-}
-
-function resolvedWaypoint(requested) {
-  const lockedTitle = window.__portfolioTimePocketDebug?.lockedStop;
-  if (!lockedTitle) return requested;
-  return waypoints.find(stop => stop.title === lockedTitle) || requested;
-}
-
 export function showWaypoint(requestedWaypoint) {
-  const waypoint = resolvedWaypoint(requestedWaypoint);
+  // The billboard controller selects once for content, pose, and destination.
+  const waypoint = requestedWaypoint;
   const index = waypoints.indexOf(waypoint);
   if (index < 0 || index === displayed) return;
 
@@ -112,11 +88,8 @@ hud.addEventListener('wheel', event => {
   if (hud.scrollHeight > hud.clientHeight + 1) event.stopPropagation();
 }, { passive: true });
 
-// Never hard-reset the panel to waypoint 01. Browsers can restore a previous
-// scroll position before or just after module startup, so initialize from the
-// actual flight position and resynchronize again on pageshow.
-showWaypoint(stopForCurrentScroll());
-addEventListener('pageshow', () => showWaypoint(stopForCurrentScroll()), { once: true });
+// Content initialization and restored-scroll updates belong to billboard-flight.
+// A separate nearest-stop writer would mismatch content and projected depth.
 
 if (new URLSearchParams(location.search).get('brief') === 'deepgram') {
   openBrief('deepgram', document.querySelector('[data-open-brief="deepgram"]'));

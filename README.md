@@ -159,3 +159,19 @@ and approach motion. Reduced motion freezes ambient travel. Billboard flame
 flows are wider and denser; engine exhaust widens beyond the attached nozzle.
 
 No local tests were run for this change, as requested.
+
+## Stable billboard ownership and technical arrivals
+
+The billboard controller now owns story selection, destination links, chapter
+labels, and projected geometry together. The world renderer no longer writes a
+competing nearest-stop story into the same HTML card. The UI presents the chosen
+story directly, without independently choosing a different stop. Its procedural
+shell measures changed content in the same frame; all planes use the same pose
+precision. Releasing a reading hold blends back into flight instead of snapping.
+
+Destinations now use a single technical dossier layout: a project headline,
+framed live facility viewport, and parallel evidence panels. All original copy
+and links remain available, with vertical scrolling on small screens or enlarged
+text. The six facilities retain their settings and add articulated service arms,
+grippers, assembly platforms and instrument tracks. The scene sizes itself to
+its own viewport rather than the browser window. No local tests were run.
