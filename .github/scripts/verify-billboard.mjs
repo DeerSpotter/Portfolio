@@ -53,7 +53,7 @@ for (const flameBehavior of [
   'function flamePath(',
   'function drawTongue(',
   'ctx.bezierCurveTo',
-  'Bright root keeps every tongue visually attached',
+  'bright root keeps every tongue visually attached',
   "renderer: 'dual-canvas-anchored-flame-corona'",
   'frontTongueCount',
   'rearTongueCount',
