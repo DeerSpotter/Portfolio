@@ -27,6 +27,20 @@ jobs:
           node-version: '22'
       - name: Capture setup, syntax, packaging and browser diagnostics
         run: node .github/scripts/run-checks.mjs
+      - name: Read validation result
+        id: validation
+        if: always()
+        shell: bash
+        run: |
+          node -e "const r=require('./.ci-results/result.json'); process.stdout.write('passed='+(r.status===0)+'\n')" >> "$GITHUB_OUTPUT"
+      - name: Preserve validated public site for deployment
+        if: steps.validation.outputs.passed == 'true' && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-site-${{ github.event.pull_request.head.sha }}
+          path: _site/
+          if-no-files-found: error
+          retention-days: 14
       - name: Publish or update the single PR diagnostic
         if: always()
         env:
