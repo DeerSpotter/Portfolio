@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createShipStub, setShipWarp } from './ship-stub.js';
+import { createShipStub, setShipEngineState } from './ship-stub.js';
 
 const canvas = document.getElementById('ship3d');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -18,10 +18,6 @@ renderer.shadowMap.enabled = false;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 renderer.setSize(window.innerWidth, window.innerHeight, false);
 
-// This scene deliberately contains only the original procedural ship and its
-// lighting. The old 3D stars, nebulae, gates, moons, ribbons, asteroids and
-// warp-streak objects are not created here. The illustrated #world canvas is
-// the complete environment behind the ship.
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 1800);
 scene.add(camera);
@@ -34,13 +30,9 @@ const rim = new THREE.PointLight(0x4bbcff, 13, 32, 2);
 rim.position.set(0, 3.5, 4.5);
 scene.add(rim);
 
-// Same procedural ship module used by the first live-3D implementation.
-// With the rest of the 3D world removed, the high-detail tier is inexpensive.
 const ship = createShipStub({ quality: 'high' });
 scene.add(ship);
 
-// Same closed 3D route from the first implementation. It is math only: no 3D
-// route geometry is rendered. Canvas progress drives position on this route.
 const route = new THREE.CatmullRomCurve3([
   new THREE.Vector3(0, 0, 0),
   new THREE.Vector3(2, 0.4, -55),
@@ -58,12 +50,15 @@ const route = new THREE.CatmullRomCurve3([
 ], true, 'catmullrom', 0.48);
 
 const worldUp = new THREE.Vector3(0, 1, 0);
-const tmpPos = new THREE.Vector3();
+const routePos = new THREE.Vector3();
+const smoothPos = new THREE.Vector3();
 const tangent = new THREE.Vector3();
+const smoothTangent = new THREE.Vector3(0, 0, -1);
 const curvatureProbe = new THREE.Vector3();
 const right = new THREE.Vector3();
 const desiredCamera = new THREE.Vector3();
 const desiredLook = new THREE.Vector3();
+let poseInitialized = false;
 
 function wrap01(value) {
   return ((value % 1) + 1) % 1;
@@ -84,6 +79,9 @@ function dampAngle(current, target, lambda, dt) {
 
 let lastTime = performance.now();
 let warpAmount = 0;
+let coastAmount = 0;
+let timeFieldAmount = 0;
+let filteredVelocity = 0;
 
 function animate(now) {
   const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
@@ -99,46 +97,70 @@ function animate(now) {
 
   ship.visible = true;
 
-  // Use the canvas journey's already-damped progress so the illustrated world
-  // and 3D ship stay on the same scroll beat. From this point forward, the ship
-  // attitude and chase camera are the original live3d.js implementation.
   const progress = state.progress;
   const velocity = state.velocity;
-  const speedSignal = Math.min(1, Math.abs(velocity) * 7.2);
-  warpAmount = damp(warpAmount, reducedMotion ? 0 : speedSignal, 5.8, dt);
+  const pocket = window.__portfolioTimePocketDebug;
+  coastAmount = damp(coastAmount, reducedMotion ? 0 : (pocket?.coastStrength || 0), 4.6, dt);
+  timeFieldAmount = damp(timeFieldAmount, reducedMotion ? 0 : (pocket?.timeFieldStrength || 0), 4.0, dt);
+  filteredVelocity = damp(filteredVelocity, velocity, coastAmount > 0.2 ? 4.2 : 7.8, dt);
 
-  route.getPointAt(progress, tmpPos);
+  const speedSignal = Math.min(1, Math.abs(filteredVelocity) * 7.2);
+  warpAmount = damp(warpAmount, reducedMotion ? 0 : speedSignal, coastAmount > 0.2 ? 3.4 : 5.8, dt);
+
+  route.getPointAt(progress, routePos);
   route.getTangentAt(progress, tangent).normalize();
-  right.crossVectors(tangent, worldUp).normalize();
+
+  if (!poseInitialized) {
+    smoothPos.copy(routePos);
+    smoothTangent.copy(tangent);
+    poseInitialized = true;
+  } else {
+    const positionLambda = 9.0 - coastAmount * 3.2 - timeFieldAmount * 1.4;
+    const tangentLambda = 7.5 - coastAmount * 2.6 - timeFieldAmount * 1.3;
+    smoothPos.lerp(routePos, 1 - Math.exp(-Math.max(3.2, positionLambda) * dt));
+    smoothTangent.lerp(tangent, 1 - Math.exp(-Math.max(2.8, tangentLambda) * dt)).normalize();
+  }
+
+  right.crossVectors(smoothTangent, worldUp).normalize();
   if (right.lengthSq() < 0.001) right.set(1, 0, 0);
 
-  ship.position.copy(tmpPos);
-  const yaw = Math.atan2(-tangent.x, -tangent.z);
-  const pitch = Math.asin(THREE.MathUtils.clamp(tangent.y, -1, 1));
+  ship.position.copy(smoothPos);
+  const yaw = Math.atan2(-smoothTangent.x, -smoothTangent.z);
+  const pitch = Math.asin(THREE.MathUtils.clamp(smoothTangent.y, -1, 1));
   route.getTangentAt(wrap01(progress + 0.008), curvatureProbe).normalize();
   const turnSignal = right.dot(curvatureProbe) * -1;
-  const targetRoll = reducedMotion ? 0 : THREE.MathUtils.clamp(turnSignal * 2.55 - velocity * 0.26, -0.82, 0.82);
+  const coastCalm = Math.max(0.18, 1 - coastAmount * 0.45 - timeFieldAmount * 0.36);
+  const targetRoll = reducedMotion ? 0 : THREE.MathUtils.clamp(
+    (turnSignal * 2.55 - filteredVelocity * 0.26) * coastCalm,
+    -0.82,
+    0.82,
+  );
 
-  ship.rotation.y = dampAngle(ship.rotation.y, yaw, 8.5, dt);
-  ship.rotation.x = dampAngle(ship.rotation.x, -pitch * 0.86, 8.5, dt);
-  ship.rotation.z = dampAngle(ship.rotation.z, targetRoll, 7.2, dt);
-  setShipWarp(ship, warpAmount);
+  const attitudeLambda = Math.max(3.4, 8.5 - coastAmount * 3.2 - timeFieldAmount * 1.2);
+  ship.rotation.y = dampAngle(ship.rotation.y, yaw, attitudeLambda, dt);
+  ship.rotation.x = dampAngle(ship.rotation.x, -pitch * 0.86, attitudeLambda, dt);
+  ship.rotation.z = dampAngle(ship.rotation.z, targetRoll, Math.max(3.0, 7.2 - coastAmount * 2.8 - timeFieldAmount), dt);
 
-  // Exact third-person chase-camera language from the first 3D prototype:
-  // camera behind and above the ship, looking forward down the route. This is
-  // intentionally NOT an orthographic/top-down screen-space placement.
-  desiredCamera.copy(tmpPos)
-    .addScaledVector(tangent, -11.6 - warpAmount * 5.5)
+  setShipEngineState(ship, {
+    thrust: warpAmount,
+    coast: coastAmount,
+    time: now * 0.001,
+  });
+
+  desiredCamera.copy(smoothPos)
+    .addScaledVector(smoothTangent, -11.6 - warpAmount * 5.5)
     .addScaledVector(worldUp, 4.5 + warpAmount * 0.8)
     .addScaledVector(right, -ship.rotation.z * 0.92);
-  camera.position.lerp(desiredCamera, 1 - Math.exp(-5.2 * dt));
+  const cameraLambda = Math.max(3.0, 5.2 - coastAmount * 1.15 - timeFieldAmount * 0.55);
+  camera.position.lerp(desiredCamera, 1 - Math.exp(-cameraLambda * dt));
 
-  desiredLook.copy(tmpPos)
-    .addScaledVector(tangent, 13.5 + warpAmount * 12)
+  desiredLook.copy(smoothPos)
+    .addScaledVector(smoothTangent, 13.5 + warpAmount * 12)
     .addScaledVector(worldUp, 0.35);
   camera.lookAt(desiredLook);
 
-  const nextFov = damp(camera.fov, 48 + warpAmount * 14, 6.2, dt);
+  const fovLambda = Math.max(3.0, 6.2 - coastAmount * 1.8 - timeFieldAmount * 0.7);
+  const nextFov = damp(camera.fov, 48 + warpAmount * 14, fovLambda, dt);
   if (Math.abs(nextFov - camera.fov) > 0.015) {
     camera.fov = nextFov;
     camera.updateProjectionMatrix();
@@ -153,7 +175,11 @@ function animate(now) {
     cameraType: 'perspective',
     progress,
     velocity,
+    filteredVelocity,
     warpAmount,
+    coastAmount,
+    timeFieldAmount,
+    engineState: coastAmount > 0.45 ? 'idle-drift' : warpAmount > 0.16 ? 'thrust' : 'cruise',
     ship: {
       x: ship.position.x,
       y: ship.position.y,

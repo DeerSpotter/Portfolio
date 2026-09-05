@@ -1,13 +1,19 @@
 import { waypoints } from './portfolio-content.js';
 import { showWaypoint } from './portfolio-ui.js';
+import './time-pocket-flight.js';
 
 const billboard = document.querySelector('.detail');
 const action = document.getElementById('detailAction');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TAU = Math.PI * 2;
+const INTERACTION_HOLD_MS = 3500;
+const INTERACTION_FIELD_THRESHOLD = 0.72;
 
 let displayed = null;
 let lastState = '';
+let interactionHold = null;
+let interactionHoldUntil = 0;
+let interactionHoldConsumedStop = null;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -36,6 +42,12 @@ function billboardSide(stop) {
 }
 
 function chooseStop(progress, activeTitle) {
+  const lockedTitle = window.__portfolioTimePocketDebug?.lockedStop;
+  if (lockedTitle) {
+    const locked = waypoints.find(stop => stop.title === lockedTitle);
+    if (locked) return locked;
+  }
+
   if (activeTitle) {
     const active = waypoints.find(stop => stop.title === activeTitle);
     if (active) return active;
@@ -45,9 +57,6 @@ function chooseStop(progress, activeTitle) {
   let bestScore = Infinity;
   for (const stop of waypoints) {
     const rel = wrapSigned(stop.at - progress);
-    // Once a billboard has clearly passed the ship, hand off to the next stop
-    // immediately. That gives the next billboard enough distance to be seen
-    // tiny near the vanishing point before its final approach.
     if (rel < -0.012 || rel > 0.34) continue;
     const score = rel < 0 ? Math.abs(rel) * 0.6 : rel;
     if (score < bestScore) {
@@ -63,14 +72,10 @@ function chooseStop(progress, activeTitle) {
   }, null).stop;
 }
 
-function project(stop, progress) {
+function project(stop, progress, coastStrength) {
   const rel = wrapSigned(stop.at - progress);
   const vp = vanishingPoint(progress);
   const side = billboardSide(stop);
-
-  // The stops are relatively close together, so the depth curve deliberately
-  // compresses the final approach. A newly handed-off billboard starts tiny
-  // near the vanishing point instead of appearing already half grown.
   const t = clamp((0.20 - rel) / 0.255, 0, 1);
   const pass = rel < 0 ? Math.pow(clamp(-rel / 0.055, 0, 1), 1.12) : 0;
 
@@ -78,9 +83,10 @@ function project(stop, progress) {
   const forwardPerspective = 0.050 + Math.pow(t, 1.74) * 1.14;
   const laneX = innerWidth * (0.50 + side * 0.47);
   const laneY = innerHeight * 0.49;
+  const pocketEase = 1 - coastStrength * 0.10;
 
   const x = vp.x
-    + (laneX - vp.x) * lateralPerspective
+    + (laneX - vp.x) * lateralPerspective * pocketEase
     + side * innerWidth * 0.44 * pass;
   const y = vp.y
     + (laneY - vp.y) * forwardPerspective
@@ -89,12 +95,10 @@ function project(stop, progress) {
   const scale = 0.12 + Math.pow(t, 1.44) * 1.10 + pass * 0.18;
   const alpha = clamp(0.10 + t * 1.18 - pass * 0.40, 0.07, 1);
 
-  // The plane is skewed toward the flight corridor. Far away it presents a
-  // stronger angle; close up it opens toward the camera, then kicks outward
-  // as the ship passes it.
   const yaw = side * (-36 + t * 25 - pass * 20);
-  const roll = side * (5.2 - t * 2.6 + pass * 5.8)
-    + Math.sin(progress * TAU * 1.35) * 0.8;
+  const rollBase = side * (5.2 - t * 2.6 + pass * 5.8);
+  const flightWobble = Math.sin(progress * TAU * 1.35) * 0.8 * (1 - coastStrength * 0.84);
+  const roll = rollBase + flightWobble;
   const skew = side * (-6.0 + t * 3.4);
 
   let state = 'distant';
@@ -102,6 +106,8 @@ function project(stop, progress) {
   else if (t >= 0.76) state = 'active';
   else if (t >= 0.61) state = 'arming';
   else if (t >= 0.34) state = 'approaching';
+
+  if (coastStrength > 0.55 && rel > -0.045 && rel < 0.065) state = 'active';
 
   return {
     x,
@@ -116,7 +122,65 @@ function project(stop, progress) {
     side,
     pass,
     state,
-    interactive: (state === 'arming' || state === 'active') && rel > -0.006,
+    interactive: (state === 'arming' || state === 'active') && rel > -0.045,
+  };
+}
+
+function captureInteractionHold(stop, screen, now) {
+  interactionHold = {
+    stopTitle: stop.title,
+    x: screen.x,
+    y: screen.y,
+    scale: screen.scale,
+    yaw: screen.yaw,
+    roll: screen.roll,
+    skew: screen.skew,
+  };
+  interactionHoldUntil = now + INTERACTION_HOLD_MS;
+  interactionHoldConsumedStop = stop.title;
+}
+
+function heldScreen(stop, screen, pocket, timeFieldStrength, now) {
+  const inInteractionZone = !reducedMotion
+    && pocket?.mode === 'time-pocket'
+    && screen.state === 'active'
+    && screen.interactive
+    && timeFieldStrength >= INTERACTION_FIELD_THRESHOLD;
+
+  if (!inInteractionZone) {
+    interactionHold = null;
+    interactionHoldUntil = 0;
+    if (interactionHoldConsumedStop !== stop.title) interactionHoldConsumedStop = null;
+    return { screen, held: false };
+  }
+
+  if (!interactionHold && interactionHoldConsumedStop !== stop.title) {
+    captureInteractionHold(stop, screen, now);
+  }
+
+  if (!interactionHold || interactionHold.stopTitle !== stop.title) {
+    return { screen, held: false };
+  }
+
+  const focusInside = billboard.matches(':hover') || billboard.contains(document.activeElement);
+  if (focusInside) interactionHoldUntil = Math.max(interactionHoldUntil, now + 350);
+
+  if (now >= interactionHoldUntil && !focusInside) {
+    interactionHold = null;
+    return { screen, held: false };
+  }
+
+  return {
+    screen: {
+      ...screen,
+      x: interactionHold.x,
+      y: interactionHold.y,
+      scale: interactionHold.scale,
+      yaw: interactionHold.yaw,
+      roll: interactionHold.roll,
+      skew: interactionHold.skew,
+    },
+    held: true,
   };
 }
 
@@ -127,15 +191,20 @@ function updateAccessibility(interactive) {
   action.setAttribute('aria-disabled', interactive ? 'false' : 'true');
 }
 
-function render() {
+function render(now = performance.now()) {
   const debug = window.__portfolioCanvasDebug;
   if (!debug?.ready) {
     requestAnimationFrame(render);
     return;
   }
 
+  const pocket = window.__portfolioTimePocketDebug;
+  const coastStrength = reducedMotion ? 0 : (pocket?.coastStrength || 0);
+  const timeFieldStrength = reducedMotion ? 0 : (pocket?.timeFieldStrength || 0);
   const stop = chooseStop(debug.progress, debug.activeStop);
-  const screen = project(stop, debug.progress);
+  const projected = project(stop, debug.progress, coastStrength);
+  const hold = heldScreen(stop, projected, pocket, timeFieldStrength, now);
+  const screen = hold.screen;
 
   if (stop !== displayed) {
     displayed = stop;
@@ -145,36 +214,45 @@ function render() {
   billboard.style.setProperty('--billboard-x', `${screen.x.toFixed(2)}px`);
   billboard.style.setProperty('--billboard-y', `${screen.y.toFixed(2)}px`);
   billboard.style.setProperty('--billboard-scale', screen.scale.toFixed(4));
-  billboard.style.setProperty('--billboard-alpha', screen.alpha.toFixed(4));
+  billboard.style.setProperty('--billboard-alpha', projected.alpha.toFixed(4));
   billboard.style.setProperty('--billboard-yaw', `${screen.yaw.toFixed(2)}deg`);
   billboard.style.setProperty('--billboard-roll', `${screen.roll.toFixed(2)}deg`);
   billboard.style.setProperty('--billboard-skew', `${screen.skew.toFixed(2)}deg`);
-  billboard.style.setProperty('--billboard-glow', clamp((screen.t - 0.48) / 0.42, 0, 1).toFixed(3));
+  billboard.style.setProperty('--billboard-glow', clamp((projected.t - 0.48) / 0.42, 0, 1).toFixed(3));
   billboard.style.setProperty('--billboard-color', stop.color);
-  billboard.style.setProperty('--billboard-side', screen.side.toFixed(3));
+  billboard.style.setProperty('--billboard-side', projected.side.toFixed(3));
+  billboard.style.setProperty('--coast-strength', coastStrength.toFixed(3));
+  billboard.style.setProperty('--time-field', timeFieldStrength.toFixed(3));
+  billboard.dataset.timePocket = coastStrength > 0.45 ? 'true' : 'false';
+  billboard.dataset.interactionHold = hold.held ? 'true' : 'false';
 
-  if (screen.state !== lastState) {
-    lastState = screen.state;
-    billboard.dataset.billboardState = screen.state;
+  if (projected.state !== lastState) {
+    lastState = projected.state;
+    billboard.dataset.billboardState = projected.state;
   }
 
-  updateAccessibility(screen.interactive || reducedMotion);
+  updateAccessibility(projected.interactive || reducedMotion);
 
   window.__portfolioBillboardDebug = {
     ready: true,
     stop: stop.title,
-    state: screen.state,
-    interactive: screen.interactive || reducedMotion,
-    rel: screen.rel,
-    depth: screen.t,
-    side: screen.side,
+    state: projected.state,
+    interactive: projected.interactive || reducedMotion,
+    interactionHold: hold.held,
+    interactionHoldConsumed: interactionHoldConsumedStop === stop.title,
+    interactionHoldMs: INTERACTION_HOLD_MS,
+    rel: projected.rel,
+    depth: projected.t,
+    side: projected.side,
     x: screen.x,
     y: screen.y,
     scale: screen.scale,
     yaw: screen.yaw,
     roll: screen.roll,
     skew: screen.skew,
-    contract: 'approaching-skewed-interactive-billboard-v1',
+    coastStrength,
+    timeFieldStrength,
+    contract: 'approaching-skewed-interactive-billboard-v3',
   };
 
   requestAnimationFrame(render);

@@ -149,6 +149,7 @@ export function createShipStub({ quality = 'high' } = {}) {
     addMesh(new THREE.CylinderGeometry(0.27, 0.27, 0.24, cylinderSegments), panelMat, [side * 1.58, -0.01, 2.10], [Math.PI / 2, 0, 0]);
 
     const core = addMesh(new THREE.BoxGeometry(0.11, 0.10, 1.74), engineMat, [side * 1.58, 0.17, 0.87]);
+    core.userData.phase = side < 0 ? 0.15 : 1.85;
     engineCores.push(core);
 
     const exhaust = addMesh(new THREE.CircleGeometry(0.17, circleSegments), engineMat, [side * 1.58, -0.01, 2.23]);
@@ -161,6 +162,7 @@ export function createShipStub({ quality = 'high' } = {}) {
       [Math.PI / 2, 0, 0]
     );
     plume.material.opacity = 0.16;
+    plume.userData.phase = side < 0 ? 0.25 : 2.15;
     enginePlumes.push(plume);
 
     if (quality === 'high') {
@@ -188,16 +190,36 @@ export function createShipStub({ quality = 'high' } = {}) {
   return ship;
 }
 
-export function setShipWarp(ship, amount) {
-  const warp = THREE.MathUtils.clamp(amount, 0, 1);
+/**
+ * Engine animation state. This replaces the old static warp-only plume logic:
+ * at speed the engines stretch, while a time-pocket coast keeps a shorter,
+ * breathing flame alive so the ship never looks frozen.
+ */
+export function setShipEngineState(ship, { thrust = 0, coast = 0, time = 0 } = {}) {
+  const warp = THREE.MathUtils.clamp(thrust, 0, 1);
+  const coastAmount = THREE.MathUtils.clamp(coast, 0, 1);
+  const idlePulse = 0.5 + 0.5 * Math.sin(time * 4.2);
   const material = ship.userData.engineMaterial;
-  if (material) material.emissiveIntensity = 3.4 + warp * 9.5;
+  if (material) {
+    material.emissiveIntensity = 3.4 + warp * 9.5 + coastAmount * (1.1 + idlePulse * 1.5);
+  }
 
   for (const core of ship.userData.engineCores || []) {
-    core.scale.z = 1 + warp * 0.34;
+    const pulse = 0.5 + 0.5 * Math.sin(time * 5.1 + (core.userData.phase || 0));
+    core.scale.z = 1 + warp * 0.34 + coastAmount * (0.025 + pulse * 0.035);
   }
+
   for (const plume of ship.userData.enginePlumes || []) {
-    plume.scale.y = 1 + warp * 2.6;
-    plume.material.opacity = (ship.userData.plumeBaseOpacity || 0.16) + warp * 0.38;
+    const phase = plume.userData.phase || 0;
+    const slowPulse = 0.5 + 0.5 * Math.sin(time * 4.6 + phase);
+    const fastFlicker = 0.5 + 0.5 * Math.sin(time * 13.4 + phase * 2.0);
+    const livingIdle = coastAmount * (0.22 + slowPulse * 0.20);
+    plume.scale.y = 1 + warp * 2.6 + livingIdle;
+    const breathe = 1 + coastAmount * (slowPulse - 0.5) * 0.10 + warp * (fastFlicker - 0.5) * 0.07;
+    plume.scale.x = breathe;
+    plume.scale.z = breathe;
+    plume.material.opacity = (ship.userData.plumeBaseOpacity || 0.16)
+      + warp * (0.34 + fastFlicker * 0.06)
+      + coastAmount * (0.07 + slowPulse * 0.08);
   }
 }
