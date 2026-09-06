@@ -15,14 +15,26 @@ let travelY = 0;
 let blocked = false;
 let deliveredDuringGesture = false;
 let virtualTravelActive = false;
+let browserMultitouchActive = false;
 
-function resetGesture() {
+function clearFlightGesture() {
   startY = null;
   lastY = null;
   travelY = 0;
   blocked = false;
   deliveredDuringGesture = false;
   virtualTravelActive = false;
+}
+
+function resetGesture() {
+  clearFlightGesture();
+  browserMultitouchActive = false;
+}
+
+function handGestureToBrowser() {
+  if (virtualTravelActive) sendVirtualTravel('cancel');
+  clearFlightGesture();
+  browserMultitouchActive = true;
 }
 
 function scrollMetrics() {
@@ -88,6 +100,15 @@ function deliverCompletedGesture(direction) {
 }
 
 addEventListener('touchstart', event => {
+  // Two or more fingers belong entirely to the browser. Do not reinterpret a
+  // pinch as flight, and do not resume flight if one finger lifts before the
+  // other. A fresh one-finger touchstart is required after zooming finishes.
+  if (event.touches.length !== 1) {
+    handGestureToBrowser();
+    return;
+  }
+  if (browserMultitouchActive) return;
+
   const touch = event.touches[0];
   if (!touch) return;
   blocked = event.target instanceof Element && Boolean(event.target.closest(BLOCKED_SWIPE_SELECTOR));
@@ -99,6 +120,13 @@ addEventListener('touchstart', event => {
 }, { passive: true });
 
 addEventListener('touchmove', event => {
+  if (event.touches.length !== 1 || browserMultitouchActive) {
+    if (!browserMultitouchActive) handGestureToBrowser();
+    // Keep application-level touchmove handlers from treating pinch movement
+    // as navigation. This does not cancel the event, so Safari still owns zoom.
+    event.stopImmediatePropagation();
+    return;
+  }
   if (blocked) return;
   const touch = event.touches[0];
   if (!touch || lastY === null) return;
@@ -124,7 +152,12 @@ addEventListener('touchmove', event => {
   deliverActiveGesture();
 }, { passive: false });
 
-addEventListener('touchend', () => {
+addEventListener('touchend', event => {
+  if (browserMultitouchActive) {
+    if (event.touches.length === 0) resetGesture();
+    return;
+  }
+
   if (virtualTravelActive) {
     sendVirtualTravel('end');
     resetGesture();
@@ -142,6 +175,10 @@ addEventListener('touchend', () => {
 }, { passive: true });
 
 addEventListener('touchcancel', () => {
+  if (browserMultitouchActive) {
+    resetGesture();
+    return;
+  }
   if (virtualTravelActive) sendVirtualTravel('cancel');
   resetGesture();
 }, { passive: true });
@@ -152,5 +189,6 @@ window.__portfolioTouchFlightDebug = {
   minimumGesturePx: MIN_GESTURE_PX,
   virtualEntryProgress: VIRTUAL_ENTRY_PROGRESS,
   delivery: 'pre-edge-virtual-travel-with-edge-fallback',
+  gestureOwnership: 'one-finger-flight-multitouch-browser',
   blockedSelector: BLOCKED_SWIPE_SELECTOR,
 };
