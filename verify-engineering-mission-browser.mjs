@@ -12,7 +12,7 @@ async function sampleAt(progress) {
   await page.waitForFunction(target => {
     const debug = window.__portfolioEngineeringMissionDebug;
     const canvas = window.__portfolioCanvasDebug;
-    return debug?.ready && canvas?.ready && Math.abs(canvas.progress - target) < 0.012;
+    return debug?.ready && canvas?.ready && Math.abs(canvas.progress - target) < 0.006;
   }, progress, { timeout: 3500 });
   await page.waitForTimeout(120);
   return page.evaluate(() => ({
@@ -54,10 +54,18 @@ try {
     throw new Error(`Existing 3D ship was not held back during launch: opacity=${launch.shipOpacity}`);
   }
 
-  const separation = await sampleAt(0.417);
-  if (separation.story.orbitalHandoff.stage !== 'payload-separation'
-      || !separation.story.orbitalHandoff.payloadReleased) {
-    throw new Error(`Payload separation was not represented: ${JSON.stringify(separation.story.orbitalHandoff)}`);
+  // Separation is intentionally a process rather than a single frame: the
+  // fairing opens first, then the payload becomes released later in the same
+  // stage. Prove both boundaries instead of requiring release at stage entry.
+  const separationStart = await sampleAt(0.417);
+  if (separationStart.story.orbitalHandoff.stage !== 'payload-separation') {
+    throw new Error(`Payload separation stage missing: ${JSON.stringify(separationStart.story.orbitalHandoff)}`);
+  }
+
+  const separationReleased = await sampleAt(0.426);
+  if (separationReleased.story.orbitalHandoff.stage !== 'payload-separation'
+      || !separationReleased.story.orbitalHandoff.payloadReleased) {
+    throw new Error(`Payload did not release during separation: ${JSON.stringify(separationReleased.story.orbitalHandoff)}`);
   }
 
   const handoff = await sampleAt(0.440);
