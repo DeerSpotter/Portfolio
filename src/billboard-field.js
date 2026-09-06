@@ -25,7 +25,10 @@ export function createBillboardFieldRenderer({ hud, billboard, reducedMotion }) 
     const now = performance.now();
     const dt = Math.min(.05, Math.max(0, (now - lastTime) / 1000));
     lastTime = now;
-    if (!reducedMotion) phaseTime += dt * (interactionHold ? .3 : 1 - timeFieldStrength * .55);
+    // Reduce Motion controls the large scene/camera motion, not this local
+    // instrument animation. Keep asteroids drifting, scan arcs sweeping, and
+    // flames flickering so the billboard still feels alive on mobile.
+    phaseTime += dt * (interactionHold ? .3 : 1 - timeFieldStrength * .55);
     if (lastSeed !== seed) {
       system = createOrbitalSystem(seed); lastSeed = seed;
       // Read the newly committed story layout in this frame, before drawing.
