@@ -25,7 +25,7 @@ document.body.insertBefore(canvas, document.getElementById('ship3d'));
 
 const shipCanvas = document.getElementById('ship3d');
 const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
-const prologueRenderer = createLoadingPrologueRenderer();
+const prologueRenderer = createLoadingPrologueRenderer(canvas);
 const sketchRenderer = createEngineeringSketchField();
 const params = new URLSearchParams(location.search);
 const forcePrologueForAutomation = params.has('prologue-test');
@@ -37,16 +37,10 @@ let pixelRatio = 1;
 let startedAt = performance.now();
 let prologueComplete = skipPrologue;
 let forcedPhase = skipPrologue ? 1 : null;
-let lastStage = skipPrologue ? 'complete' : 'system-start';
+let lastStage = skipPrologue ? 'complete' : 'ignition';
 
 function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, value));
-}
-
-function smoothstep(edge0, edge1, value) {
-  if (edge0 === edge1) return value >= edge1 ? 1 : 0;
-  const t = clamp((value - edge0) / (edge1 - edge0));
-  return t * t * (3 - 2 * t);
 }
 
 function resize() {
@@ -79,6 +73,7 @@ function finishPrologue() {
   prologueComplete = true;
   canvas.style.pointerEvents = 'none';
   canvas.style.zIndex = '1';
+  prologueRenderer.hide();
   if (shipCanvas) shipCanvas.style.removeProperty('opacity');
   dispatchEvent(new CustomEvent('portfolio-loading-prologue-complete'));
 }
@@ -92,6 +87,7 @@ window.__portfolioSetProloguePhaseForTest = value => {
     prologueComplete = false;
     canvas.style.pointerEvents = 'auto';
     canvas.style.zIndex = '20';
+    prologueRenderer.show();
   }
   return true;
 };
@@ -110,10 +106,13 @@ function render(now) {
     phase: 1,
     stage: 'complete',
     softwareFocused: false,
-    commandIssued: true,
+    commandIssued: false,
     payloadReleased: true,
+    loadingProgress: 1,
+    shipOpacity: 1,
     appReady,
     complete: true,
+    renderer: 'three-launch-background',
   };
 
   if (!prologueComplete) {
@@ -125,10 +124,7 @@ function render(now) {
     prologueState = prologueRenderer.render(ctx, cssW, cssH, phase, appReady, shipScreen);
     lastStage = prologueState.stage;
 
-    if (shipCanvas) {
-      const shipReveal = smoothstep(0.948, 0.998, phase);
-      shipCanvas.style.opacity = String(shipReveal);
-    }
+    if (shipCanvas) shipCanvas.style.opacity = String(prologueState.shipOpacity);
 
     if (phase >= 1 && appReady) finishPrologue();
   }
@@ -151,11 +147,11 @@ function render(now) {
 
   window.__portfolioEngineeringMissionDebug = {
     ready: true,
-    renderer: 'loading-prologue-plus-persistent-sketch-canvas',
+    renderer: 'three-launch-loading-plus-persistent-sketch-canvas',
     input: prologueComplete ? 'scroll-owned-flight-progress' : 'loading-sequence-time',
     reparenting: false,
     proprietaryUI: false,
-    storyArc: 'mission-software-to-launch-to-live-flight',
+    storyArc: 'three-launch-to-live-flight',
     storyActive: !prologueComplete,
     storyStage: prologueComplete ? 'normal-flight' : lastStage,
     prologue: prologueState,
@@ -176,5 +172,6 @@ resize();
 if (skipPrologue) {
   canvas.style.pointerEvents = 'none';
   canvas.style.zIndex = '1';
+  prologueRenderer.hide();
 }
 requestAnimationFrame(render);
