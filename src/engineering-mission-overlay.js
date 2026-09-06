@@ -158,6 +158,7 @@ function render(now) {
     sketchField: sketchState,
     loadingDurationMs: LOADING_PROLOGUE_DURATION_MS,
     loadingInputBlocked: !prologueComplete,
+    loadingUi: 'progress-bar-only',
     liveShipTransition: prologueComplete ? 'normal-flight' : 'payload-release-to-existing-three-overlay',
   };
 
