@@ -61,10 +61,19 @@ function render(now) {
     terminalStage: 'drone',
   };
 
+  const transformOffsetX = cssW * (cssW <= 720 ? -0.20 : -0.30);
+
   if (flight?.ready) {
     const degraded = Boolean(flight.degraded);
     sketchState = sketchRenderer.render(ctx, cssW, cssH, flight.progress, degraded);
+
+    // Keep the original scroll timing and geometry intact, but stage the focused
+    // sketch -> block -> part -> motor -> drone sequence on the left side.
+    // The continuous engineering notebook remains in its original world space.
+    ctx.save();
+    ctx.translate(transformOffsetX, 0);
     transformState = transformRenderer.render(ctx, cssW, cssH, flight.progress, now);
+    ctx.restore();
   }
 
   window.__portfolioEngineeringMissionDebug = {
@@ -77,6 +86,8 @@ function render(now) {
     storyActive: Boolean(transformState.active),
     storyStage: transformState.active ? transformState.stage : 'normal-flight',
     transform: transformState,
+    transformPlacement: 'left-side',
+    transformOffsetX,
     sketchField: sketchState,
     loadingPrologue: false,
     loadingInputBlocked: false,
