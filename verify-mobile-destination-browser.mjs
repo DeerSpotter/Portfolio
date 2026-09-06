@@ -11,7 +11,8 @@ for (const required of [
   if (!destinationCss.includes(required)) throw new Error(`Destination CSS zoom contract missing: ${required}`);
 }
 for (const required of [
-  "matchMedia('(hover: none) and (pointer: coarse)').matches",
+  "const coarseTouch = matchMedia('(hover: none) and (pointer: coarse)');",
+  'return coarseTouch.matches',
   "visualViewport?.addEventListener('resize', scheduleFlightSync",
   "visualViewport?.addEventListener('scroll', scheduleFlightSync",
   "contract: 'destination-flight-brief-v3'",
