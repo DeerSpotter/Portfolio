@@ -48,7 +48,8 @@ export function createBillboardFieldRenderer({ hud, billboard, reducedMotion }) 
     // Mobile uses the same projected pose as the card itself. Compact mode still
     // draws fewer orbital objects, but flame vents now use the default desktop
     // count, dimensions, turbulence atlas, and animation on every screen size.
-    const transform = `translate3d(${screen.x}px,${screen.y}px,0) translate(-50%,-50%) perspective(900px) rotateY(${screen.yaw}deg) rotateZ(${screen.roll}deg) skewY(${screen.skew}deg) scale(${screen.scale})`;
+    const perspective = compact ? 680 : 900;
+    const transform = `translate3d(${screen.x}px,${screen.y}px,0) translate(-50%,-50%) perspective(${perspective}px) rotateY(${screen.yaw}deg) rotateZ(${screen.roll}deg) skewY(${screen.skew}deg) scale(${screen.scale})`;
     const strength = Math.min(1, ({ distant: 0, approaching: .2, arming: .58, active: .96, passing: .44 }[projected.state] || 0)
       + (projected.state === 'active' ? timeFieldStrength * .04 : 0));
     const counts = [];
