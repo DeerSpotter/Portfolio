@@ -47,6 +47,7 @@ export function describeLoadingPrologue(phase, appReady = true) {
     appReady,
     complete: p >= 1 && appReady,
     loadingProgress: appReady ? p : Math.min(0.965, p),
+    shipOpacity: smoothstep(0.90, 0.995, p),
   };
 }
 
@@ -249,6 +250,7 @@ export function createLoadingPrologueRenderer(insertBeforeNode = document.getEle
   const targetWorld = new THREE.Vector3();
   const targetNdc = new THREE.Vector3();
   const cameraDirection = new THREE.Vector3();
+  const desiredPayloadWorld = new THREE.Vector3();
   let currentWidth = 1;
   let currentHeight = 1;
 
@@ -309,6 +311,8 @@ export function createLoadingPrologueRenderer(insertBeforeNode = document.getEle
     world.camera.position.set(camX, camY, camZ);
     world.camera.lookAt(0, rocketY + lerp(0.4, 3.2, atmosphereExit), 0);
 
+    world.payload.position.set(0, 5.05, 0);
+    world.payload.scale.setScalar(1);
     if (handoff > 0.001 && shipScreen && Number.isFinite(shipScreen.x) && Number.isFinite(shipScreen.y)) {
       world.payload.getWorldPosition(payloadWorld);
       targetNdc.set(
@@ -318,7 +322,9 @@ export function createLoadingPrologueRenderer(insertBeforeNode = document.getEle
       ).unproject(world.camera);
       cameraDirection.copy(targetNdc).sub(world.camera.position).normalize();
       targetWorld.copy(world.camera.position).addScaledVector(cameraDirection, 9.5);
-      world.payload.position.copy(world.rocket.worldToLocal(payloadWorld.clone().lerp(targetWorld, handoff)));
+      desiredPayloadWorld.copy(payloadWorld).lerp(targetWorld, handoff);
+      world.rocket.worldToLocal(desiredPayloadWorld);
+      world.payload.position.copy(desiredPayloadWorld);
       world.payload.scale.setScalar(1 + handoff * 0.55);
     }
 
