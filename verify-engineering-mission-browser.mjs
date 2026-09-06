@@ -4,20 +4,20 @@ const url = process.env.PORTFOLIO_URL || 'http://127.0.0.1:8231/';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
-async function sampleAt(progress) {
-  await page.evaluate(value => {
+async function sampleAt(targetPage, progress) {
+  await targetPage.evaluate(value => {
     const max = document.documentElement.scrollHeight - innerHeight;
     scrollTo(0, max * value);
   }, progress);
-  await page.waitForFunction(target => {
+  await targetPage.waitForFunction(target => {
     const canvas = window.__portfolioCanvasDebug;
     const story = window.__portfolioEngineeringMissionDebug;
     return canvas?.ready
       && story?.ready
       && Math.abs(canvas.progress - target) < 0.008;
   }, progress, { timeout: 3500 });
-  await page.waitForTimeout(100);
-  return page.evaluate(() => ({
+  await targetPage.waitForTimeout(100);
+  return targetPage.evaluate(() => ({
     debug: structuredClone(window.__portfolioEngineeringMissionDebug),
     shipOpacity: document.getElementById('ship3d')?.style.opacity || '',
     overlayCount: document.querySelectorAll('#engineeringMissionThread').length,
@@ -27,13 +27,81 @@ async function sampleAt(progress) {
   }));
 }
 
+function assertMobileTransformSuppressed(sample, expectedSourceStage, label) {
+  if (!sample.debug.mobileTransformSuppressed) {
+    throw new Error(`${label}: focused engineering transform was not marked suppressed: ${JSON.stringify(sample.debug)}`);
+  }
+  if (sample.debug.focusedTransformPolicy !== 'desktop-only') {
+    throw new Error(`${label}: focused transform policy changed: ${sample.debug.focusedTransformPolicy}`);
+  }
+  if (sample.debug.transform?.active || sample.debug.storyActive) {
+    throw new Error(`${label}: focused engineering animation is still active on mobile: ${JSON.stringify(sample.debug.transform)}`);
+  }
+  if (sample.debug.transformPlacement !== 'mobile-suppressed' || sample.debug.transformOffsetX !== 0) {
+    throw new Error(`${label}: mobile transform retained desktop placement: placement=${sample.debug.transformPlacement}, offset=${sample.debug.transformOffsetX}`);
+  }
+  if (sample.debug.transform?.stage !== 'mobile-suppressed' || !sample.debug.transform?.suppressed) {
+    throw new Error(`${label}: mobile transform did not publish the suppression state: ${JSON.stringify(sample.debug.transform)}`);
+  }
+  if (expectedSourceStage && sample.debug.transform?.sourceStage !== expectedSourceStage) {
+    throw new Error(`${label}: wrong underlying stage while suppressed: expected=${expectedSourceStage}, actual=${sample.debug.transform?.sourceStage}`);
+  }
+}
+
+async function verifyMobileSuppression(viewport, label) {
+  const mobilePage = await browser.newPage({
+    viewport,
+    hasTouch: true,
+    isMobile: true,
+    deviceScaleFactor: 2,
+  });
+
+  try {
+    await mobilePage.goto(url, { waitUntil: 'load', timeout: 30000 });
+    await mobilePage.waitForFunction(() => window.__portfolioCanvasDebug?.ready
+      && window.__portfolioShipDebug?.ready
+      && window.__portfolioEngineeringMissionDebug?.ready, null, { timeout: 15000 });
+
+    const sketch = await sampleAt(mobilePage, 0.130);
+    assertMobileTransformSuppressed(sketch, 'sketch', `${label} sketch`);
+
+    const drone = await sampleAt(mobilePage, 0.285);
+    assertMobileTransformSuppressed(drone, 'drone', `${label} drone`);
+
+    if (!drone.debug.coarseTouch && viewport.width > 720) {
+      throw new Error(`${label}: expanded mobile viewport is not exercising the coarse-touch suppression path.`);
+    }
+
+    await mobilePage.locator('[data-stop="1"]').click();
+    await mobilePage.waitForFunction(() => window.__portfolioCanvasDebug?.activeStop === 'Engineering');
+    await mobilePage.locator('#detailAction').click();
+    await mobilePage.waitForFunction(
+      () => document.getElementById('destination')?.open && window.__portfolioDestinationDebug?.ready,
+      null,
+      { timeout: 5000 },
+    );
+    await mobilePage.waitForTimeout(150);
+
+    const insideDestination = await mobilePage.evaluate(() => ({
+      destinationOpen: Boolean(document.getElementById('destination')?.open),
+      debug: structuredClone(window.__portfolioEngineeringMissionDebug),
+    }));
+    if (!insideDestination.destinationOpen) throw new Error(`${label}: destination did not stay open.`);
+    assertMobileTransformSuppressed({ debug: insideDestination.debug }, null, `${label} destination`);
+
+    console.log(`[portfolio-engineering-mission] ${label}=mobile-transform-suppressed`);
+  } finally {
+    await mobilePage.close();
+  }
+}
+
 try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready
     && window.__portfolioShipDebug?.ready
     && window.__portfolioEngineeringMissionDebug?.ready, null, { timeout: 15000 });
 
-  const baseline = await sampleAt(0.05);
+  const baseline = await sampleAt(page, 0.05);
   if (baseline.overlayCount !== 1) throw new Error(`Engineering overlay duplicated: ${baseline.overlayCount}`);
   if (baseline.launchCanvasCount !== 0) throw new Error(`Launch canvas survived the rollback: ${baseline.launchCanvasCount}`);
   if (baseline.overlayZ !== '1' || baseline.overlayPointerEvents !== 'none') {
@@ -46,6 +114,9 @@ try {
   if (baseline.debug.commandSequence || baseline.debug.satelliteSequence || baseline.debug.rocketSequence) {
     throw new Error(`Removed mission/space sequence is still enabled: ${JSON.stringify(baseline.debug)}`);
   }
+  if (baseline.debug.mobileTransformSuppressed) {
+    throw new Error(`Desktop unexpectedly suppressed the focused engineering transform: ${JSON.stringify(baseline.debug)}`);
+  }
 
   const stages = [
     [0.130, 'sketch'],
@@ -56,7 +127,7 @@ try {
   ];
 
   for (const [progress, expectedStage] of stages) {
-    const sample = await sampleAt(progress);
+    const sample = await sampleAt(page, progress);
     const transform = sample.debug.transform;
     if (!transform?.active || transform.stage !== expectedStage) {
       throw new Error(`Sketch-to-drone stage mismatch at ${progress}: expected=${expectedStage}, actual=${JSON.stringify(transform)}`);
@@ -90,7 +161,7 @@ try {
     }
   }
 
-  const after = await sampleAt(0.34);
+  const after = await sampleAt(page, 0.34);
   if (after.debug.transform?.active || after.debug.storyStage !== 'normal-flight') {
     throw new Error(`Sketch-to-drone sequence did not release back to normal flight: ${JSON.stringify(after.debug)}`);
   }
@@ -108,8 +179,12 @@ try {
     throw new Error(`Engineering notebook did not evolve with scroll position: ${JSON.stringify(sketchA.sketchField.visible)}`);
   }
 
+  await verifyMobileSuppression({ width: 414, height: 896 }, '414x896 touch portrait');
+  await verifyMobileSuppression({ width: 844, height: 390 }, '844x390 touch landscape');
+
   console.log('[portfolio-engineering-mission] PASS');
-  console.log('[portfolio-engineering-mission] sequence=right(sketch->block->part)->left(motor->drone)');
+  console.log('[portfolio-engineering-mission] desktop=right(sketch->block->part)->left(motor->drone)');
+  console.log('[portfolio-engineering-mission] mobile=focused-transform-hidden-before-and-inside-destination');
   console.log('[portfolio-engineering-mission] removed=loading,command,satellites,rocket');
   console.log('[portfolio-engineering-mission] flight=continuous-engineering-notebook');
 } finally {
