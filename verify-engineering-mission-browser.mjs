@@ -1,33 +1,10 @@
 import { chromium } from 'playwright';
 
-const baseUrl = process.env.PORTFOLIO_URL || 'http://127.0.0.1:8231/';
-const url = new URL(baseUrl);
-url.searchParams.set('prologue-test', '1');
-
+const url = process.env.PORTFOLIO_URL || 'http://127.0.0.1:8231/';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
-async function setProloguePhase(phase) {
-  const accepted = await page.evaluate(value => window.__portfolioSetProloguePhaseForTest?.(value), phase);
-  if (!accepted) throw new Error('Prologue debug phase override was unavailable.');
-  await page.waitForFunction(value => {
-    const debug = window.__portfolioEngineeringMissionDebug;
-    return debug?.ready && Math.abs((debug.prologue?.phase ?? -1) - value) < 0.005;
-  }, phase, { timeout: 2500 });
-  await page.waitForTimeout(80);
-  return page.evaluate(() => ({
-    debug: structuredClone(window.__portfolioEngineeringMissionDebug),
-    shipOpacity: document.getElementById('ship3d')?.style.opacity || '',
-    overlayCount: document.querySelectorAll('#engineeringMissionThread').length,
-    launchCanvasCount: document.querySelectorAll('#engineeringLaunch3d').length,
-    launchDisplay: document.getElementById('engineeringLaunch3d')?.style.display || '',
-    overlayZ: document.getElementById('engineeringMissionThread')?.style.zIndex || '',
-    overlayPointerEvents: document.getElementById('engineeringMissionThread')?.style.pointerEvents || '',
-    ship: structuredClone(window.__portfolioShipDebug),
-  }));
-}
-
-async function sampleFlight(progress) {
+async function sampleAt(progress) {
   await page.evaluate(value => {
     const max = document.documentElement.scrollHeight - innerHeight;
     scrollTo(0, max * value);
@@ -37,118 +14,91 @@ async function sampleFlight(progress) {
     const story = window.__portfolioEngineeringMissionDebug;
     return canvas?.ready
       && story?.ready
-      && story.storyStage === 'normal-flight'
       && Math.abs(canvas.progress - target) < 0.008;
   }, progress, { timeout: 3500 });
   await page.waitForTimeout(100);
-  return page.evaluate(() => structuredClone(window.__portfolioEngineeringMissionDebug));
+  return page.evaluate(() => ({
+    debug: structuredClone(window.__portfolioEngineeringMissionDebug),
+    shipOpacity: document.getElementById('ship3d')?.style.opacity || '',
+    overlayCount: document.querySelectorAll('#engineeringMissionThread').length,
+    launchCanvasCount: document.querySelectorAll('#engineeringLaunch3d').length,
+    overlayZ: document.getElementById('engineeringMissionThread')?.style.zIndex || '',
+    overlayPointerEvents: document.getElementById('engineeringMissionThread')?.style.pointerEvents || '',
+  }));
 }
 
 try {
-  await page.goto(url.href, { waitUntil: 'load', timeout: 30000 });
+  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready
     && window.__portfolioShipDebug?.ready
-    && window.__portfolioEngineeringMissionDebug?.ready
-    && typeof window.__portfolioSetProloguePhaseForTest === 'function', null, { timeout: 15000 });
+    && window.__portfolioEngineeringMissionDebug?.ready, null, { timeout: 15000 });
+
+  const baseline = await sampleAt(0.05);
+  if (baseline.overlayCount !== 1) throw new Error(`Engineering overlay duplicated: ${baseline.overlayCount}`);
+  if (baseline.launchCanvasCount !== 0) throw new Error(`Launch canvas survived the rollback: ${baseline.launchCanvasCount}`);
+  if (baseline.overlayZ !== '1' || baseline.overlayPointerEvents !== 'none') {
+    throw new Error(`Engineering layer unexpectedly owns input: z=${baseline.overlayZ}, pointerEvents=${baseline.overlayPointerEvents}`);
+  }
+  if (baseline.shipOpacity !== '') throw new Error(`Engineering layer overrides the live ship opacity: ${baseline.shipOpacity}`);
+  if (baseline.debug.loadingPrologue || baseline.debug.loadingInputBlocked) {
+    throw new Error(`Loading sequence survived the rollback: ${JSON.stringify(baseline.debug)}`);
+  }
+  if (baseline.debug.commandSequence || baseline.debug.satelliteSequence || baseline.debug.rocketSequence) {
+    throw new Error(`Removed mission/space sequence is still enabled: ${JSON.stringify(baseline.debug)}`);
+  }
 
   const stages = [
-    [0.05, 'ignition'],
-    [0.28, 'ascent'],
-    [0.58, 'upper-atmosphere'],
-    [0.78, 'payload-separation'],
-    [0.94, 'flight-handoff'],
+    [0.130, 'sketch'],
+    [0.165, 'block'],
+    [0.205, 'part'],
+    [0.240, 'motor'],
+    [0.285, 'drone'],
   ];
 
-  for (const [phase, expectedStage] of stages) {
-    const sample = await setProloguePhase(phase);
-    if (sample.overlayCount !== 1 || sample.launchCanvasCount !== 1) {
-      throw new Error(`Loading canvases duplicated: overlay=${sample.overlayCount}, launch=${sample.launchCanvasCount}`);
+  for (const [progress, expectedStage] of stages) {
+    const sample = await sampleAt(progress);
+    const transform = sample.debug.transform;
+    if (!transform?.active || transform.stage !== expectedStage) {
+      throw new Error(`Sketch-to-drone stage mismatch at ${progress}: expected=${expectedStage}, actual=${JSON.stringify(transform)}`);
     }
-    if (sample.debug.prologue.stage !== expectedStage) {
-      throw new Error(`Prologue stage mismatch at ${phase}: expected=${expectedStage}, actual=${sample.debug.prologue.stage}`);
+    if (transform.contract !== 'engineering-sketch-to-drone-v2' || transform.terminalStage !== 'drone') {
+      throw new Error(`Sketch-to-drone contract changed: ${JSON.stringify(transform)}`);
     }
-    if (sample.debug.prologue.renderer !== 'three-launch-background') {
-      throw new Error(`Loading background is not the Three.js launch renderer: ${sample.debug.prologue.renderer}`);
+    if (sample.debug.storyArc !== 'sketch-to-drone-only') {
+      throw new Error(`Engineering story expanded beyond the requested sequence: ${sample.debug.storyArc}`);
     }
-    if (sample.debug.prologue.softwareFocused || sample.debug.prologue.commandIssued) {
-      throw new Error(`Command/software sequence was reintroduced: ${JSON.stringify(sample.debug.prologue)}`);
+    if (sample.debug.commandSequence || sample.debug.satelliteSequence || sample.debug.rocketSequence || sample.debug.loadingPrologue) {
+      throw new Error(`Removed sequence returned during ${expectedStage}: ${JSON.stringify(sample.debug)}`);
     }
-    if (sample.launchDisplay !== 'block') {
-      throw new Error(`3D launch canvas was not visible during loading at ${phase}: display=${sample.launchDisplay}`);
-    }
-    if (sample.overlayZ !== '20' || sample.overlayPointerEvents !== 'auto') {
-      throw new Error(`Loading sequence lost full-focus ownership at ${phase}: z=${sample.overlayZ}, pointerEvents=${sample.overlayPointerEvents}`);
+    if (sample.launchCanvasCount !== 0 || sample.shipOpacity !== '') {
+      throw new Error(`Sketch-to-drone sequence interfered with flight at ${expectedStage}: launch=${sample.launchCanvasCount}, shipOpacity=${sample.shipOpacity}`);
     }
     if (sample.debug.reparenting !== false || sample.debug.proprietaryUI !== false) {
-      throw new Error(`Loading prologue violated isolation/public-concept boundary: ${JSON.stringify(sample.debug)}`);
+      throw new Error(`Engineering sequence violated isolation/public-concept boundary: ${JSON.stringify(sample.debug)}`);
     }
   }
 
-  const initial = await setProloguePhase(0.12);
-  const later = await setProloguePhase(0.62);
-  if (!(later.debug.prologue.loadingProgress > initial.debug.prologue.loadingProgress)) {
-    throw new Error(`Loading bar did not advance with launch timeline: ${initial.debug.prologue.loadingProgress} -> ${later.debug.prologue.loadingProgress}`);
-  }
-  if (later.debug.loadingDurationMs < 8500 || later.debug.loadingDurationMs > 11000) {
-    throw new Error(`Launch loading timeline is outside intended cinematic window: ${later.debug.loadingDurationMs}ms`);
-  }
-  if (!later.debug.prologue.starfieldVisible) {
-    throw new Error('Upper-atmosphere launch did not transition into the procedural starfield.');
+  const after = await sampleAt(0.34);
+  if (after.debug.transform?.active || after.debug.storyStage !== 'normal-flight') {
+    throw new Error(`Sketch-to-drone sequence did not release back to normal flight: ${JSON.stringify(after.debug)}`);
   }
 
-  const separation = await setProloguePhase(0.82);
-  if (!separation.debug.prologue.payloadReleased || !separation.debug.prologue.fairingSeparated) {
-    throw new Error(`3D payload separation was not represented: ${JSON.stringify(separation.debug.prologue)}`);
-  }
-  if (separation.debug.prologue.transitionTarget !== 'live-3d-ship-screen-position') {
-    throw new Error(`Payload handoff lost the live ship projection target: ${separation.debug.prologue.transitionTarget}`);
-  }
-  if (!Number.isFinite(separation.ship.ship?.screenX) || !Number.isFinite(separation.ship.ship?.screenY)) {
-    throw new Error(`3D ship screen projection unavailable for loading handoff: ${JSON.stringify(separation.ship.ship)}`);
-  }
-
-  const handoff = await setProloguePhase(0.96);
-  if (!(Number(handoff.shipOpacity) > 0.08 && Number(handoff.shipOpacity) < 1)) {
-    throw new Error(`Live ship did not crossfade during payload handoff: opacity=${handoff.shipOpacity}`);
-  }
-
-  await setProloguePhase(1);
-  await page.waitForFunction(() => window.__portfolioEngineeringMissionDebug?.storyStage === 'normal-flight');
-  const complete = await page.evaluate(() => ({
-    debug: structuredClone(window.__portfolioEngineeringMissionDebug),
-    shipOpacity: document.getElementById('ship3d')?.style.opacity || '',
-    launchDisplay: document.getElementById('engineeringLaunch3d')?.style.display || '',
-    zIndex: document.getElementById('engineeringMissionThread')?.style.zIndex || '',
-    pointerEvents: document.getElementById('engineeringMissionThread')?.style.pointerEvents || '',
-  }));
-  if (complete.shipOpacity !== '') throw new Error(`Ship opacity override survived loading: ${complete.shipOpacity}`);
-  if (complete.launchDisplay !== 'none') throw new Error(`3D launch canvas survived into normal flight: display=${complete.launchDisplay}`);
-  if (complete.zIndex !== '1' || complete.pointerEvents !== 'none') {
-    throw new Error(`Engineering canvas did not release loading ownership: z=${complete.zIndex}, pointerEvents=${complete.pointerEvents}`);
-  }
-  if (complete.debug.liveShipTransition !== 'normal-flight') {
-    throw new Error(`Existing flight did not become the post-loading experience: ${complete.debug.liveShipTransition}`);
-  }
-
-  const sketchA = await sampleFlight(0.05);
-  const sketchB = await sampleFlight(0.35);
+  const sketchA = baseline.debug;
+  const sketchB = after.debug;
   if (sketchA.sketchField.contract !== 'continuous-engineering-notebook-v1'
       || sketchB.sketchField.contract !== 'continuous-engineering-notebook-v1') {
-    throw new Error('Persistent engineering notebook contract missing after loading.');
+    throw new Error('Persistent engineering notebook contract is missing.');
   }
   if (sketchA.sketchField.motifCount < 10 || sketchA.sketchField.visibleCount < 1 || sketchB.sketchField.visibleCount < 1) {
-    throw new Error(`Engineering sketches are not distributed through the full flight: A=${JSON.stringify(sketchA.sketchField)}, B=${JSON.stringify(sketchB.sketchField)}`);
+    throw new Error(`Engineering sketches are not distributed through flight: A=${JSON.stringify(sketchA.sketchField)}, B=${JSON.stringify(sketchB.sketchField)}`);
   }
   if (JSON.stringify(sketchA.sketchField.visible) === JSON.stringify(sketchB.sketchField.visible)) {
     throw new Error(`Engineering notebook did not evolve with scroll position: ${JSON.stringify(sketchA.sketchField.visible)}`);
   }
-  if (sketchA.storyActive || sketchB.storyActive) {
-    throw new Error('A mid-scroll mission takeover remained active after moving the launch into loading.');
-  }
 
   console.log('[portfolio-engineering-mission] PASS');
-  console.log('[portfolio-engineering-mission] loading=3d-launch->payload->live-ship');
-  console.log('[portfolio-engineering-mission] ui=loading-bar-only');
+  console.log('[portfolio-engineering-mission] sequence=sketch->block->part->motor->drone');
+  console.log('[portfolio-engineering-mission] removed=loading,command,satellites,rocket');
   console.log('[portfolio-engineering-mission] flight=continuous-engineering-notebook');
 } finally {
   await browser.close();
