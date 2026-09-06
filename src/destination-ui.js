@@ -275,12 +275,21 @@ function syncFlightFromScroll() {
     reparenting: false,
     mobileDepthMotion: usesMobileDepthMotion(),
     visualViewportScale: visualViewport?.scale || 1,
+    zoomGeometry: 'layout-viewport-owned',
     contract: 'destination-flight-brief-v3',
   };
   if (position >= lastCenter + EXIT_TRIGGER) beginDeparture();
 }
 
-function scheduleFlightSync() {
+function scheduleFlightSync(event) {
+  // Pinch zoom belongs to Safari's visual viewport. Never recompute destination
+  // geometry from visualViewport resize/pan events; magnify the existing scene.
+  if (typeof visualViewport !== 'undefined' && event?.currentTarget === visualViewport) return;
+  // Some mobile browsers also surface a window resize during pinch. Ignore that
+  // while visual zoom is active, but keep true unzoomed layout/orientation resize.
+  if (event?.type === 'resize' && event?.currentTarget === window
+      && typeof visualViewport !== 'undefined'
+      && Math.abs((visualViewport.scale || 1) - 1) > 0.001) return;
   if (scrollFrame) return;
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = 0;
