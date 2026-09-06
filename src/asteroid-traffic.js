@@ -13,7 +13,11 @@ export function createAsteroidTraffic(seed = 59381) {
   let elapsed = 0;
   return {
     render(ctx, w, h, dt, progress, reducedMotion, degraded = false) {
-      if (!reducedMotion) elapsed += Math.min(.05, dt);
+      // Reduce Motion applies to the large camera/scene response, not the local
+      // traffic field. These rocks are the perspective streaks that launch from
+      // the vanishing point toward the viewer, so their depth clock must keep
+      // advancing on mobile exactly as it does on desktop.
+      elapsed += Math.min(.05, dt);
       const vx = w * (.5 + Math.sin(progress * TAU * 1.1) * .035);
       const vy = h * (.35 + Math.cos(progress * TAU * .75) * .025);
       const count = degraded ? 24 : rocks.length;

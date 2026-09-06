@@ -44,12 +44,14 @@ try {
   await run('Syntax: destination browser proof', process.execPath, ['--check', 'verify-destination-browser.mjs']);
   await run('Syntax: mobile destination browser proof', process.execPath, ['--check', 'verify-mobile-destination-browser.mjs']);
   await run('Syntax: mobile browser proof', process.execPath, ['--check', 'verify-mobile-browser.mjs']);
+  await run('Syntax: asteroid traffic proof', process.execPath, ['--check', 'verify-asteroid-traffic.mjs']);
   await run('Syntax: pinch zoom browser proof', process.execPath, ['--check', 'verify-pinch-zoom-browser.mjs']);
   await run('Syntax: time-pocket browser proof', process.execPath, ['--check', 'verify-time-pocket-browser.mjs']);
   await run('Layered scenery contract', process.execPath, ['.github/scripts/verify-scenery.mjs']);
   await run('Interactive billboard contract', process.execPath, ['.github/scripts/verify-billboard.mjs']);
   await run('Scene-spanning ribbon contract', process.execPath, ['.github/scripts/verify-ribbon.mjs']);
   await run('Cinematic time-pocket contract', process.execPath, ['.github/scripts/verify-time-pocket.mjs']);
+  await run('Asteroid traffic motion contract', process.execPath, ['verify-asteroid-traffic.mjs']);
   await run('Prepare browser test dependency', 'npm', ['init', '-y']);
   await run('Install pinned Playwright', 'npm', ['install', '--no-save', '--package-lock=false', 'playwright@1.55.0']);
   await run('Install Chromium and system dependencies', 'npx', ['playwright', 'install', '--with-deps', 'chromium']);
