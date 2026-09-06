@@ -51,7 +51,8 @@ function clamp(value, min, max) {
 }
 
 function usesMobileDepthMotion() {
-  return matchMedia('(max-width: 800px), (max-width: 900px) and (max-height: 600px)').matches;
+  return matchMedia('(hover: none) and (pointer: coarse)').matches
+    || matchMedia('(max-width: 800px), (max-width: 900px) and (max-height: 600px)').matches;
 }
 
 function textElement(tag, className, text) {
@@ -272,7 +273,9 @@ function syncFlightFromScroll() {
     poses,
     departure: false,
     reparenting: false,
-    contract: 'destination-flight-brief-v2',
+    mobileDepthMotion: usesMobileDepthMotion(),
+    visualViewportScale: visualViewport?.scale || 1,
+    contract: 'destination-flight-brief-v3',
   };
   if (position >= lastCenter + EXIT_TRIGGER) beginDeparture();
 }
@@ -326,6 +329,9 @@ export function openDestination(section, trigger) {
 }
 
 dialog.addEventListener('scroll', scheduleFlightSync, { passive: true });
+addEventListener('resize', scheduleFlightSync, { passive: true });
+visualViewport?.addEventListener('resize', scheduleFlightSync, { passive: true });
+visualViewport?.addEventListener('scroll', scheduleFlightSync, { passive: true });
 dialog.addEventListener('close', () => {
   scene.stop();
   document.body.classList.remove('reading-brief');
