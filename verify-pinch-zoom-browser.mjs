@@ -15,6 +15,23 @@ function assertNear(actual, expected, tolerance, message) {
   }
 }
 
+async function openEngineeringDestination(targetPage) {
+  await targetPage.locator('[data-stop="1"]').click();
+  await targetPage.waitForFunction(
+    () => window.__portfolioCanvasDebug?.activeStop === 'Engineering'
+      && window.__portfolioBillboardDebug?.readingHold,
+    null,
+    { timeout: 5000 },
+  );
+  await targetPage.locator('#detailAction').click();
+  await targetPage.waitForFunction(
+    () => document.getElementById('destination')?.open
+      && window.__portfolioDestinationDebug?.ready,
+    null,
+    { timeout: 5000 },
+  );
+}
+
 try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(
@@ -87,13 +104,51 @@ try {
     { timeout: 5000 },
   );
 
-  const destinationContract = await page.evaluate(() => ({
-    contract: window.__portfolioDestinationDebug.contract,
-    zoomGeometry: window.__portfolioDestinationDebug.zoomGeometry,
-    flightPosition: window.__portfolioDestinationDebug.flightPosition,
-  }));
+  const destinationContract = await page.evaluate(() => {
+    const destination = document.getElementById('destination');
+    return {
+      contract: window.__portfolioDestinationDebug.contract,
+      zoomGeometry: window.__portfolioDestinationDebug.zoomGeometry,
+      presentation: window.__portfolioDestinationDebug.presentation,
+      datasetPresentation: destination.dataset.presentation,
+      flightPosition: window.__portfolioDestinationDebug.flightPosition,
+      nativeModal: destination.matches(':modal'),
+      ariaModal: destination.getAttribute('aria-modal'),
+      hudInert: document.getElementById('hud').inert,
+      worldInert: document.getElementById('world').inert,
+      shipInert: document.getElementById('ship3d').inert,
+    };
+  });
   if (destinationContract.zoomGeometry !== 'layout-viewport-owned') {
     throw new Error(`Destination still treats visual zoom as geometry: ${JSON.stringify(destinationContract)}`);
+  }
+  if (destinationContract.presentation !== 'mobile-overlay'
+      || destinationContract.datasetPresentation !== 'mobile-overlay'
+      || destinationContract.nativeModal
+      || destinationContract.ariaModal !== 'true') {
+    throw new Error(`Coarse-touch destination entered Safari-style native modal state: ${JSON.stringify(destinationContract)}`);
+  }
+  if (!destinationContract.hudInert || !destinationContract.worldInert || !destinationContract.shipInert) {
+    throw new Error(`Mobile overlay did not isolate the flight background: ${JSON.stringify(destinationContract)}`);
+  }
+
+  const destinationPinch = await page.evaluate(() => {
+    const surface = document.getElementById('destination');
+    const makeTouch = (x, y) => ({ clientX: x, clientY: y });
+    const dispatch = (type, touches) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'touches', { value: touches });
+      surface.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    dispatch('touchstart', [makeTouch(120, 360), makeTouch(294, 510)]);
+    const movePrevented = dispatch('touchmove', [makeTouch(90, 330), makeTouch(324, 540)]);
+    dispatch('touchend', [makeTouch(324, 540)]);
+    dispatch('touchend', []);
+    return { movePrevented };
+  });
+  if (destinationPinch.movePrevented) {
+    throw new Error('Destination overlay canceled the browser-owned pinch gesture.');
   }
 
   const viewportResizeIgnored = await page.evaluate(async () => {
@@ -111,11 +166,52 @@ try {
     throw new Error('visualViewport pinch events recomputed destination geometry.');
   }
 
+  await page.locator('#destination .close-button').click();
+  await page.waitForFunction(() => !document.getElementById('destination')?.open, null, { timeout: 5000 });
+  const restoredBackground = await page.evaluate(() => ({
+    hudInert: document.getElementById('hud').inert,
+    worldInert: document.getElementById('world').inert,
+    shipInert: document.getElementById('ship3d').inert,
+  }));
+  if (restoredBackground.hudInert || restoredBackground.worldInert || restoredBackground.shipInert) {
+    throw new Error(`Closing mobile destination left flight background inert: ${JSON.stringify(restoredBackground)}`);
+  }
+
+  const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await desktop.goto(url, { waitUntil: 'load', timeout: 30000 });
+    await desktop.waitForFunction(
+      () => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready,
+      null,
+      { timeout: 15000 },
+    );
+    await openEngineeringDestination(desktop);
+    const desktopPresentation = await desktop.evaluate(() => {
+      const destination = document.getElementById('destination');
+      return {
+        presentation: window.__portfolioDestinationDebug.presentation,
+        datasetPresentation: destination.dataset.presentation,
+        nativeModal: destination.matches(':modal'),
+        hudInert: document.getElementById('hud').inert,
+      };
+    });
+    if (desktopPresentation.presentation !== 'modal'
+        || desktopPresentation.datasetPresentation !== 'modal'
+        || !desktopPresentation.nativeModal
+        || desktopPresentation.hudInert) {
+      throw new Error(`Desktop destination lost native modal behavior: ${JSON.stringify(desktopPresentation)}`);
+    }
+  } finally {
+    await desktop.close();
+  }
+
   console.log('[portfolio-pinch-zoom] PASS');
   console.log('[portfolio-pinch-zoom] one-finger=flight');
   console.log('[portfolio-pinch-zoom] multi-touch=browser-owned');
   console.log('[portfolio-pinch-zoom] billboard-reading-hold=preserved');
   console.log('[portfolio-pinch-zoom] visual-viewport=display-only');
+  console.log('[portfolio-pinch-zoom] mobile-destination=fixed-nonmodal-overlay');
+  console.log('[portfolio-pinch-zoom] desktop-destination=native-modal');
 } finally {
   await browser.close();
 }
