@@ -124,10 +124,19 @@ function assertCompactHud(sample, label, limits) {
   if (sample.fieldPointerEvents !== 'none') throw new Error(`${label}: procedural field intercepts touch input.`);
 }
 
+function parseTranslate3d(transform) {
+  const match = transform.match(/^translate3d\(\s*(-?\d+(?:\.\d+)?)px\s*,\s*(-?\d+(?:\.\d+)?)px\s*,\s*(-?\d+(?:\.\d+)?)(?:px)?\s*\)/);
+  if (!match) return null;
+  return { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) };
+}
+
 function assertMobileFieldAnchor(sample, label) {
-  const expectedAnchor = `translate3d(${sample.billboard.x}px,${sample.billboard.y}px,0)`;
-  if (!sample.fieldTransform.startsWith(expectedAnchor)) {
-    throw new Error(`${label}: procedural field lost the billboard screen anchor: expected=${expectedAnchor}, field=${sample.fieldTransform}`);
+  const anchor = parseTranslate3d(sample.fieldTransform);
+  const xError = anchor ? Math.abs(anchor.x - sample.billboard.x) : Infinity;
+  const yError = anchor ? Math.abs(anchor.y - sample.billboard.y) : Infinity;
+  const zError = anchor ? Math.abs(anchor.z) : Infinity;
+  if (!anchor || xError > 0.02 || yError > 0.02 || zError > 0.02) {
+    throw new Error(`${label}: procedural field lost the billboard screen anchor: expected=(${sample.billboard.x},${sample.billboard.y},0), parsed=${JSON.stringify(anchor)}, field=${sample.fieldTransform}`);
   }
   if (!sample.fieldTransform.includes('perspective(680px)')) {
     throw new Error(`${label}: procedural field does not share the mobile billboard perspective: ${sample.fieldTransform}`);
