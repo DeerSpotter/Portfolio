@@ -53,7 +53,6 @@ async function inspectHud(targetPage = page) {
     const subtitle = document.querySelector('.subtitle');
     const buttons = [...document.querySelectorAll('.waypoint-nav button')];
     const frontField = document.querySelector('.billboard-field-canvas-front');
-    const fieldRect = frontField?.getBoundingClientRect();
     const visible = element => {
       const style = getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0;
@@ -76,7 +75,6 @@ async function inspectHud(targetPage = page) {
       actionHeight: actionRect.height,
       actionMinHeight: actionStyle.minHeight,
       actionBorderRadius: actionStyle.borderRadius,
-      fieldCenter: fieldRect ? { x: fieldRect.x + fieldRect.width / 2, y: fieldRect.y + fieldRect.height / 2 } : null,
       navCount: buttons.length,
       navHeights: buttons.map(button => button.getBoundingClientRect().height),
       hiddenWaypoints: buttons.filter(button => !visible(button)).length,
@@ -126,6 +124,25 @@ function assertCompactHud(sample, label, limits) {
   if (sample.fieldPointerEvents !== 'none') throw new Error(`${label}: procedural field intercepts touch input.`);
 }
 
+function assertMobileFieldAnchor(sample, label) {
+  const expectedAnchor = `translate3d(${sample.billboard.x}px,${sample.billboard.y}px,0)`;
+  if (!sample.fieldTransform.startsWith(expectedAnchor)) {
+    throw new Error(`${label}: procedural field lost the billboard screen anchor: expected=${expectedAnchor}, field=${sample.fieldTransform}`);
+  }
+  if (!sample.fieldTransform.includes('perspective(680px)')) {
+    throw new Error(`${label}: procedural field does not share the mobile billboard perspective: ${sample.fieldTransform}`);
+  }
+  if (sample.billboard.flameCount !== 32
+      || sample.billboard.rearFlameCount !== 20
+      || sample.billboard.frontFlameCount !== 12) {
+    throw new Error(`${label}: default billboard flame field is incomplete: ${JSON.stringify({
+      total: sample.billboard.flameCount,
+      rear: sample.billboard.rearFlameCount,
+      front: sample.billboard.frontFlameCount,
+    })}`);
+  }
+}
+
 try {
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioCanvasDebug?.ready && window.__portfolioBillboardDebug?.ready && window.__portfolioShipDebug?.ready, null, { timeout: 15000 });
@@ -139,6 +156,7 @@ try {
   if (!portrait.fieldTransform.includes(`scale(${portrait.billboard.scale})`)) {
     throw new Error(`390x844 portrait: procedural field lost billboard flight scale: field=${portrait.fieldTransform}, billboard=${portrait.billboard.scale}`);
   }
+  assertMobileFieldAnchor(portrait, '390x844 portrait');
 
   await page.locator('#detailAction').click();
   await page.waitForFunction(() => document.getElementById('destination')?.open && window.__portfolioDestinationDebug?.ready, null, { timeout: 5000 });
@@ -169,11 +187,13 @@ try {
   await page.waitForTimeout(250);
   const narrow = await inspectHud();
   assertCompactHud(narrow, '320x568 portrait', { h1: 15, subtitle: 8, detailWidth: 166, navHeight: 24 });
+  assertMobileFieldAnchor(narrow, '320x568 portrait');
 
   await page.setViewportSize({ width: 844, height: 390 });
   await page.waitForTimeout(250);
   const landscape = await inspectHud();
   assertCompactHud(landscape, '844x390 landscape', { h1: 15, subtitle: 8, detailWidth: 157, navHeight: 23 });
+  assertMobileFieldAnchor(landscape, '844x390 landscape');
   if (!(landscape.billboard.scale < narrow.billboard.scale * 0.9)) {
     throw new Error(`Landscape resize reused a stale portrait pose: portrait scale=${narrow.billboard.scale}, landscape scale=${landscape.billboard.scale}`);
   }
@@ -197,14 +217,7 @@ try {
   if (reduced.renderedDetailWidth > 165) {
     throw new Error(`Reduced-motion projected card grew beyond mobile game scale: rendered width=${reduced.renderedDetailWidth}px.`);
   }
-  if (!reduced.fieldCenter) throw new Error('Reduced-motion procedural field is missing.');
-  const fieldOffset = Math.hypot(
-    reduced.fieldCenter.x - reduced.detailCenter.x,
-    reduced.fieldCenter.y - reduced.detailCenter.y,
-  );
-  if (fieldOffset > 2) {
-    throw new Error(`Reduced-motion field detached from projected card: center offset=${fieldOffset.toFixed(2)}px.`);
-  }
+  assertMobileFieldAnchor(reduced, '414x896 reduced-motion iPhone');
   if (reduced.fieldComputedTransform === 'none') throw new Error('Reduced-motion procedural field lost its projected transform.');
   if (reduced.touchInput?.contract !== 'touch-edge-to-flight-loop-v4'
     || reduced.touchInput?.delivery !== 'pre-edge-virtual-travel-with-edge-fallback') {
@@ -349,6 +362,7 @@ try {
   console.log('[portfolio-mobile] ios-text-inflation=disabled');
   console.log('[portfolio-mobile] reduced-motion=side-projected-reading-plane');
   console.log('[portfolio-mobile] billboard-action=compact-inline-link');
+  console.log('[portfolio-mobile] billboard-flames=default-32');
   console.log('[portfolio-mobile] touch-loop=pre-edge-virtual-travel-no-wall');
   console.log('[portfolio-mobile] billboard=valid-flight-swipe-surface');
   console.log('[portfolio-mobile] content=present-not-hidden');
