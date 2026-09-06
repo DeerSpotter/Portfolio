@@ -37,6 +37,12 @@ const panels = [...dialog.querySelectorAll('.destination-stage-panel')];
 const counter = dialog.querySelector('.destination-stage-counter');
 const meter = dialog.querySelector('.destination-stage-meter');
 const cue = dialog.querySelector('.destination-scroll-cue');
+const coarseTouch = matchMedia('(hover: none) and (pointer: coarse)');
+const flightSurfaceNodes = [
+  document.getElementById('world'),
+  document.getElementById('ship3d'),
+  document.getElementById('hud'),
+].filter(Boolean);
 let opener;
 let currentSection = null;
 let currentStages = [];
@@ -45,14 +51,36 @@ let layerStages = [null, null];
 let scrollFrame = 0;
 let departureTimer = 0;
 let departing = false;
+let mobileOverlayActive = false;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
 function usesMobileDepthMotion() {
-  return matchMedia('(hover: none) and (pointer: coarse)').matches
+  return coarseTouch.matches
     || matchMedia('(max-width: 800px), (max-width: 900px) and (max-height: 600px)').matches;
+}
+
+function setFlightSurfaceInert(active) {
+  for (const node of flightSurfaceNodes) node.inert = active;
+}
+
+function showDestination() {
+  mobileOverlayActive = coarseTouch.matches;
+  dialog.dataset.presentation = mobileOverlayActive ? 'mobile-overlay' : 'modal';
+  if (mobileOverlayActive) {
+    // iOS Safari can strand an already zoomed page when a native modal enters
+    // the top layer. Keep the same dialog DOM and modal semantics, but present
+    // it as a fixed in-document overlay so browser pinch/pan remains available.
+    setFlightSurfaceInert(true);
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.show();
+    return;
+  }
+
+  dialog.removeAttribute('aria-modal');
+  dialog.showModal();
 }
 
 function textElement(tag, className, text) {
@@ -276,6 +304,7 @@ function syncFlightFromScroll() {
     mobileDepthMotion: usesMobileDepthMotion(),
     visualViewportScale: visualViewport?.scale || 1,
     zoomGeometry: 'layout-viewport-owned',
+    presentation: mobileOverlayActive ? 'mobile-overlay' : 'modal',
     contract: 'destination-flight-brief-v3',
   };
   if (position >= lastCenter + EXIT_TRIGGER) beginDeparture();
@@ -329,7 +358,7 @@ export function openDestination(section, trigger) {
     panel.style.opacity = '0';
     panel.style.pointerEvents = 'none';
   });
-  dialog.showModal();
+  showDestination();
   document.body.classList.add('reading-brief');
   dialog.scrollTop = 0;
   dialog.querySelector('#destinationTitle').focus({ preventScroll: true });
@@ -345,6 +374,10 @@ dialog.addEventListener('close', () => {
   scene.stop();
   document.body.classList.remove('reading-brief');
   dialog.removeAttribute('data-departing');
+  dialog.removeAttribute('data-presentation');
+  dialog.removeAttribute('aria-modal');
+  setFlightSurfaceInert(false);
+  mobileOverlayActive = false;
   currentSection = null;
   currentStages = [];
   activeStage = -1;

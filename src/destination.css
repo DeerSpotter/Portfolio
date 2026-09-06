@@ -6,6 +6,11 @@
   background: radial-gradient(ellipse at 90% 0, #233a43 0, transparent 48%), #0b141c;
   font-family: var(--mono); overscroll-behavior: contain;
 }
+#destination[data-presentation='mobile-overlay'][open] {
+  position: fixed; inset: 0; z-index: 20; display: block;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y pinch-zoom;
+}
 #destination::backdrop {
   background: #0b141c;
   transition: background-color 320ms ease;
