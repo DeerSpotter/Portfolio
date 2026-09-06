@@ -105,7 +105,10 @@ export function drawMoon(ctx, system, x, y, r, tint = '#a9b9ae') {
 
 export function drawOrbitalDisplay(ctx, system, w, h, time, strength, front = false, compact = false) {
   const halfW = w / 2 + 6, halfH = h / 2 + 7;
-  const reach = compact ? 10 : 40;
+  // Compact mode is a density optimization only. Preserve the desktop depth
+  // envelope so mobile asteroids still sweep out of the billboard toward the
+  // viewer instead of orbiting in a flattened ring tight against the card.
+  const reach = 40;
   const phase = system.phase;
   if (!front) {
     traceContour(ctx, halfW, halfH, phase, 4);
@@ -144,7 +147,7 @@ export function drawOrbitalDisplay(ctx, system, w, h, time, strength, front = fa
     const a = rock.angle + time * .022;
     if ((Math.sin(a + phase) > .35) !== front) continue;
     const p = contourPoint(a, halfW, halfH, phase, reach * (.7 + rock.band * 1.45));
-    drawRock(ctx, rock, p.x, p.y, compact ? .5 : 1, true);
+    drawRock(ctx, rock, p.x, p.y, 1, true);
   }
   if (!compact) for (const moon of system.moons) {
     const a = moon.angle + time * .035 / moon.orbit;
