@@ -26,7 +26,7 @@ document.body.insertBefore(canvas, document.getElementById('ship3d'));
 const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
 const transformRenderer = createEngineeringTransformRenderer();
 const sketchRenderer = createEngineeringSketchField();
-const LEFT_STAGES = new Set(['sketch', 'block', 'part']);
+const LEFT_STAGES = new Set(['motor', 'drone']);
 let cssW = 1;
 let cssH = 1;
 let pixelRatio = 1;
@@ -70,15 +70,15 @@ function render(now) {
     sketchState = sketchRenderer.render(ctx, cssW, cssH, flight.progress, degraded);
 
     const layoutState = describeEngineeringTransform(flight.progress);
-    const keepLeft = layoutState.active && LEFT_STAGES.has(layoutState.stage);
+    const moveLeft = layoutState.active && LEFT_STAGES.has(layoutState.stage);
     transformPlacement = layoutState.active
-      ? (keepLeft ? 'left-pre-motor' : 'right-motor-drone')
+      ? (moveLeft ? 'left-motor-drone' : 'right-pre-motor')
       : 'inactive';
-    transformOffsetX = keepLeft ? cssW * (cssW <= 720 ? -0.20 : -0.30) : 0;
+    transformOffsetX = moveLeft ? cssW * (cssW <= 720 ? -0.20 : -0.30) : 0;
 
-    // Keep sketch, stock, and machined-part work on the left. Once the motor/
-    // torque stage begins, return to the original right-side geometry and keep
-    // the powered motor -> drone portion there. The scroll timeline is unchanged.
+    // Keep sketch, stock, and machined-part work at the original right-side
+    // geometry. When the motor/torque stage begins, move the powered motor ->
+    // drone portion to the left. The scroll timeline and stage timing are unchanged.
     ctx.save();
     ctx.translate(transformOffsetX, 0);
     transformState = transformRenderer.render(ctx, cssW, cssH, flight.progress, now);
