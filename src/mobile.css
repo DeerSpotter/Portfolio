@@ -1,6 +1,8 @@
 /* Mobile keeps the desktop flight language and shrinks the interface around it.
    No content is removed: the scene gets the screen, while every control remains present. */
-@media (max-width: 700px), (max-width: 900px) and (max-height: 600px) {
+@media (max-width: 700px),
+       (max-width: 900px) and (max-height: 600px),
+       (hover: none) and (pointer: coarse) {
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -222,7 +224,8 @@
    projection as desktop/mobile flight. Scroll position still selects the
    reading plane, including the correct left/right side for each waypoint. */
 @media (prefers-reduced-motion: reduce) and (max-width: 700px),
-       (prefers-reduced-motion: reduce) and (max-width: 900px) and (max-height: 600px) {
+       (prefers-reduced-motion: reduce) and (max-width: 900px) and (max-height: 600px),
+       (prefers-reduced-motion: reduce) and (hover: none) and (pointer: coarse) {
   .detail,
   .billboard-field-canvas {
     will-change: auto;
