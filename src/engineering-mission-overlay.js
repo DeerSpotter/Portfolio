@@ -1,4 +1,5 @@
 import { createEngineeringMissionThread, ENGINEERING_MISSION_CONTRACT } from './engineering-mission-thread.js';
+import { createOrbitalHandoffRenderer, ORBITAL_HANDOFF_CONTRACT } from './engineering-orbital-handoff.js';
 
 const canvas = document.createElement('canvas');
 canvas.id = 'engineeringMissionThread';
@@ -15,8 +16,10 @@ Object.assign(canvas.style, {
 
 document.body.insertBefore(canvas, document.getElementById('ship3d'));
 
+const shipCanvas = document.getElementById('ship3d');
 const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
-const renderer = createEngineeringMissionThread();
+const missionRenderer = createEngineeringMissionThread();
+const orbitalRenderer = createOrbitalHandoffRenderer();
 let cssW = 1;
 let cssH = 1;
 let pixelRatio = 1;
@@ -35,25 +38,53 @@ function resize() {
 function render(now) {
   ctx.clearRect(0, 0, cssW, cssH);
   const flight = window.__portfolioCanvasDebug;
-  let state = {
+  const ship = window.__portfolioShipDebug;
+  let missionState = {
     contract: ENGINEERING_MISSION_CONTRACT,
     active: false,
     phase: null,
     stage: 'waiting-for-flight',
     commandIssued: false,
   };
+  let handoffState = {
+    contract: ORBITAL_HANDOFF_CONTRACT,
+    active: false,
+    phase: null,
+    stage: 'waiting-for-flight',
+    payloadReleased: false,
+    shipOpacity: 1,
+  };
 
   if (flight?.ready) {
-    state = renderer.render(ctx, cssW, cssH, flight.progress, now, Boolean(flight.degraded));
+    const degraded = Boolean(flight.degraded);
+    missionState = missionRenderer.render(ctx, cssW, cssH, flight.progress, now, degraded);
+    const shipScreen = ship?.ready ? { x: ship.ship?.screenX, y: ship.ship?.screenY } : null;
+    handoffState = orbitalRenderer.render(ctx, cssW, cssH, flight.progress, now, degraded, shipScreen);
   }
 
+  // The live Three.js ship is the payload at the end of the story. Hide it while
+  // the command/network/launch sequence is in front of the visitor, then reveal
+  // that exact renderer at payload separation instead of drawing a substitute.
+  if (shipCanvas) {
+    if (handoffState.active) shipCanvas.style.opacity = String(handoffState.shipOpacity);
+    else shipCanvas.style.removeProperty('opacity');
+  }
+
+  const storyActive = Boolean(missionState.active || handoffState.active);
+  const storyStage = handoffState.active ? handoffState.stage : missionState.stage;
+
   window.__portfolioEngineeringMissionDebug = {
-    ...state,
+    ...missionState,
     ready: true,
     renderer: 'isolated-transparent-canvas',
     input: 'scroll-owned-flight-progress',
     reparenting: false,
     proprietaryUI: false,
+    storyArc: 'engineering-to-command-to-orbit-to-live-flight',
+    storyActive,
+    storyStage,
+    orbitalHandoff: handoffState,
+    liveShipTransition: handoffState.active ? 'payload-release-to-existing-three-overlay' : 'normal-flight',
   };
   requestAnimationFrame(render);
 }
