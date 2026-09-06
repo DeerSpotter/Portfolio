@@ -237,7 +237,7 @@ export function createLoadingPrologueRenderer(insertBeforeNode = document.getEle
   webglCanvas.id = 'engineeringLaunch3d';
   webglCanvas.setAttribute('aria-hidden', 'true');
   Object.assign(webglCanvas.style, {
-    position: 'fixed', inset: '0', width: '100%', height: '100%', display: 'block', pointerEvents: 'none', zIndex: '19',
+    position: 'fixed', inset: '0', width: '100%', height: '100%', display: 'none', pointerEvents: 'none', zIndex: '19',
   });
   document.body.insertBefore(webglCanvas, insertBeforeNode || document.body.firstChild);
 
