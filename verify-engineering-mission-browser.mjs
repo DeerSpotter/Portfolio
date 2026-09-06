@@ -77,16 +77,16 @@ try {
       throw new Error(`Engineering sequence violated isolation/public-concept boundary: ${JSON.stringify(sample.debug)}`);
     }
 
-    const preMotor = expectedStage === 'sketch' || expectedStage === 'block' || expectedStage === 'part';
-    const expectedPlacement = preMotor ? 'left-pre-motor' : 'right-motor-drone';
+    const powered = expectedStage === 'motor' || expectedStage === 'drone';
+    const expectedPlacement = powered ? 'left-motor-drone' : 'right-pre-motor';
     if (sample.debug.transformPlacement !== expectedPlacement) {
       throw new Error(`Engineering placement mismatch at ${expectedStage}: expected=${expectedPlacement}, actual=${sample.debug.transformPlacement}`);
     }
-    if (preMotor && !(sample.debug.transformOffsetX < -300)) {
-      throw new Error(`Pre-motor engineering work did not stay on the left: stage=${expectedStage}, offset=${sample.debug.transformOffsetX}`);
+    if (!powered && sample.debug.transformOffsetX !== 0) {
+      throw new Error(`Pre-motor engineering work did not stay on the right-side baseline: stage=${expectedStage}, offset=${sample.debug.transformOffsetX}`);
     }
-    if (!preMotor && sample.debug.transformOffsetX !== 0) {
-      throw new Error(`Motor/drone did not return to the right-side baseline: stage=${expectedStage}, offset=${sample.debug.transformOffsetX}`);
+    if (powered && !(sample.debug.transformOffsetX < -300)) {
+      throw new Error(`Motor/drone did not move to the left: stage=${expectedStage}, offset=${sample.debug.transformOffsetX}`);
     }
   }
 
@@ -109,7 +109,7 @@ try {
   }
 
   console.log('[portfolio-engineering-mission] PASS');
-  console.log('[portfolio-engineering-mission] sequence=left(sketch->block->part)->right(motor->drone)');
+  console.log('[portfolio-engineering-mission] sequence=right(sketch->block->part)->left(motor->drone)');
   console.log('[portfolio-engineering-mission] removed=loading,command,satellites,rocket');
   console.log('[portfolio-engineering-mission] flight=continuous-engineering-notebook');
 } finally {
