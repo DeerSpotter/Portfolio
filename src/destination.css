@@ -127,7 +127,8 @@
 #destination[data-place='observatory'] { --destination-panel: #192e3ce8; }
 #destination[data-place='dock'] { --destination-panel: #132e31e8; }
 
-@media (max-width: 800px) {
+@media (max-width: 800px),
+       (hover: none) and (pointer: coarse) {
   .destination-layout { padding: 12px; }
   .destination-header { gap: 10px; }
   .destination-hero { min-height: 44vh; align-items: flex-end; }
@@ -155,7 +156,8 @@
    Keep the desktop approach/read/pass transform even when the OS asks the
    surrounding scene to reduce motion. */
 @media (prefers-reduced-motion: reduce) and (max-width: 800px),
-       (prefers-reduced-motion: reduce) and (max-width: 900px) and (max-height: 600px) {
+       (prefers-reduced-motion: reduce) and (max-width: 900px) and (max-height: 600px),
+       (prefers-reduced-motion: reduce) and (hover: none) and (pointer: coarse) {
   .destination-stage-panel {
     transform:
       translate3d(var(--destination-flight-x), var(--destination-flight-y), 0)

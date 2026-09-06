@@ -1,4 +1,23 @@
+import fs from 'node:fs';
 import { chromium } from 'playwright';
+
+const mobileCss = fs.readFileSync('src/mobile.css', 'utf8');
+const destinationCss = fs.readFileSync('src/destination.css', 'utf8');
+const destinationUi = fs.readFileSync('src/destination-ui.js', 'utf8');
+for (const required of [
+  '(hover: none) and (pointer: coarse)',
+]) {
+  if (!mobileCss.includes(required)) throw new Error(`Mobile CSS zoom contract missing: ${required}`);
+  if (!destinationCss.includes(required)) throw new Error(`Destination CSS zoom contract missing: ${required}`);
+}
+for (const required of [
+  "matchMedia('(hover: none) and (pointer: coarse)').matches",
+  "visualViewport?.addEventListener('resize', scheduleFlightSync",
+  "visualViewport?.addEventListener('scroll', scheduleFlightSync",
+  "contract: 'destination-flight-brief-v3'",
+]) {
+  if (!destinationUi.includes(required)) throw new Error(`Destination zoom contract missing: ${required}`);
+}
 
 const url = process.env.PORTFOLIO_URL || 'http://127.0.0.1:8231/';
 const browser = await chromium.launch({ headless: true });
@@ -45,13 +64,16 @@ async function inspectStageZero(page) {
       .find(item => Number(item.dataset.stageIndex) === 0);
     const style = panel ? getComputedStyle(panel) : null;
     const rect = panel?.getBoundingClientRect() || null;
+    const body = panel?.querySelector('.destination-stage-body');
     return {
       reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      coarseTouch: matchMedia('(hover: none) and (pointer: coarse)').matches,
       viewport: { width: innerWidth, height: innerHeight },
       pose,
       transform: style?.transform || null,
       filter: style?.filter || null,
       opacity: style ? Number(style.opacity) : null,
+      bodyFont: body ? Number.parseFloat(getComputedStyle(body).fontSize) : null,
       rect: rect ? { width: rect.width, height: rect.height, x: rect.x, y: rect.y } : null,
       debug,
     };
@@ -66,6 +88,9 @@ function assertFarPose(sample, label) {
   if (!(sample.pose.opacity < 0.8)) throw new Error(`${label}: first card did not fade with depth: ${JSON.stringify(sample.pose)}`);
   if (!sample.transform || sample.transform === 'none') {
     throw new Error(`${label}: CSS flattened the destination depth transform under Reduce Motion.`);
+  }
+  if (sample.debug.contract !== 'destination-flight-brief-v3') {
+    throw new Error(`${label}: destination controller is not using the zoom-stable contract: ${sample.debug.contract}`);
   }
 }
 
@@ -82,8 +107,8 @@ function assertNearPose(far, near, label) {
   }
 }
 
-async function verifyViewport(viewport, label) {
-  const page = await browser.newPage({ viewport });
+async function verifyViewport(viewport, label, pageOptions = {}) {
+  const page = await browser.newPage({ viewport, ...pageOptions });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   try {
     await openEngineeringDestination(page);
@@ -102,6 +127,7 @@ async function verifyViewport(viewport, label) {
     }
 
     console.log(`[portfolio-mobile-destination] ${label}=PASS`);
+    return { far, near, passing };
   } finally {
     await page.close();
   }
@@ -110,8 +136,26 @@ async function verifyViewport(viewport, label) {
 try {
   await verifyViewport({ width: 414, height: 896 }, '414x896 reduced-motion portrait');
   await verifyViewport({ width: 844, height: 390 }, '844x390 reduced-motion landscape');
+
+  // Safari Page Zoom changes the effective CSS viewport. A zoomed-out iPhone
+  // can therefore report a width larger than the old 800px mobile breakpoint
+  // while it is still unequivocally a coarse touch device. Preserve the same
+  // mobile layout and destination depth contract in that state.
+  const zoomExpanded = await verifyViewport(
+    { width: 860, height: 1600 },
+    '860x1600 zoom-expanded touch portrait',
+    { hasTouch: true, isMobile: true, deviceScaleFactor: 2 },
+  );
+  if (!zoomExpanded.far.coarseTouch || !zoomExpanded.far.debug.mobileDepthMotion) {
+    throw new Error(`Zoom-expanded touch viewport fell back to desktop motion: ${JSON.stringify(zoomExpanded.far)}`);
+  }
+  if (!(zoomExpanded.far.bodyFont < 13)) {
+    throw new Error(`Zoom-expanded touch viewport fell out of compact mobile CSS: bodyFont=${zoomExpanded.far.bodyFont}px.`);
+  }
+
   console.log('[portfolio-mobile-destination] motion=far->reading-plane->pass-viewer');
   console.log('[portfolio-mobile-destination] reduced-motion=navigation-depth-preserved');
+  console.log('[portfolio-mobile-destination] page-zoom=coarse-touch-contract-preserved');
 } finally {
   await browser.close();
 }

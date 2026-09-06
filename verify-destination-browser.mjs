@@ -67,11 +67,14 @@ try {
     track: Boolean(document.querySelector('.destination-briefing-track')),
     exitLabel: document.querySelector('#destination .close-button')?.textContent.trim(),
   }));
-  if (initial.debug.contract !== 'destination-flight-brief-v2'
+  if (initial.debug.contract !== 'destination-flight-brief-v3'
       || initial.debug.section !== 'engineering'
       || initial.debug.stage !== 0
       || initial.debug.stages !== 4
-      || initial.debug.reparenting !== false) {
+      || initial.debug.reparenting !== false
+      || initial.debug.mobileDepthMotion !== false
+      || !Number.isFinite(initial.debug.visualViewportScale)
+      || initial.debug.visualViewportScale <= 0) {
     throw new Error(`Destination flight contract mismatch: ${JSON.stringify(initial.debug)}`);
   }
   if (!initial.track || initial.panelCount !== 2 || initial.cloneArtifacts !== 0) {
@@ -137,6 +140,8 @@ try {
   }
 
   console.log('[portfolio-destination] PASS');
+  console.log('[portfolio-destination] contract=destination-flight-brief-v3');
+  console.log('[portfolio-destination] desktopMobileDepthMotion=false');
   console.log('[portfolio-destination] flightBillboard=baseline-no-staging');
   console.log('[portfolio-destination] structure=fixed-two-layer-no-reparenting');
   console.log('[portfolio-destination] motion=far->reading-plane->pass-viewer');
