@@ -1,5 +1,6 @@
 import {
   createEngineeringTransformRenderer,
+  describeEngineeringTransform,
   ENGINEERING_TRANSFORM_CONTRACT,
 } from './engineering-mission-thread.js';
 import {
@@ -25,6 +26,7 @@ document.body.insertBefore(canvas, document.getElementById('ship3d'));
 const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
 const transformRenderer = createEngineeringTransformRenderer();
 const sketchRenderer = createEngineeringSketchField();
+const LEFT_STAGES = new Set(['sketch', 'block', 'part']);
 let cssW = 1;
 let cssH = 1;
 let pixelRatio = 1;
@@ -60,16 +62,23 @@ function render(now) {
     stage: 'waiting-for-flight',
     terminalStage: 'drone',
   };
-
-  const transformOffsetX = cssW * (cssW <= 720 ? -0.20 : -0.30);
+  let transformPlacement = 'inactive';
+  let transformOffsetX = 0;
 
   if (flight?.ready) {
     const degraded = Boolean(flight.degraded);
     sketchState = sketchRenderer.render(ctx, cssW, cssH, flight.progress, degraded);
 
-    // Keep the original scroll timing and geometry intact, but stage the focused
-    // sketch -> block -> part -> motor -> drone sequence on the left side.
-    // The continuous engineering notebook remains in its original world space.
+    const layoutState = describeEngineeringTransform(flight.progress);
+    const keepLeft = layoutState.active && LEFT_STAGES.has(layoutState.stage);
+    transformPlacement = layoutState.active
+      ? (keepLeft ? 'left-pre-motor' : 'right-motor-drone')
+      : 'inactive';
+    transformOffsetX = keepLeft ? cssW * (cssW <= 720 ? -0.20 : -0.30) : 0;
+
+    // Keep sketch, stock, and machined-part work on the left. Once the motor/
+    // torque stage begins, return to the original right-side geometry and keep
+    // the powered motor -> drone portion there. The scroll timeline is unchanged.
     ctx.save();
     ctx.translate(transformOffsetX, 0);
     transformState = transformRenderer.render(ctx, cssW, cssH, flight.progress, now);
@@ -86,7 +95,7 @@ function render(now) {
     storyActive: Boolean(transformState.active),
     storyStage: transformState.active ? transformState.stage : 'normal-flight',
     transform: transformState,
-    transformPlacement: 'left-side',
+    transformPlacement,
     transformOffsetX,
     sketchField: sketchState,
     loadingPrologue: false,
