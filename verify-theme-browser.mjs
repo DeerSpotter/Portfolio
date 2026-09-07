@@ -26,13 +26,22 @@ async function inspect(page) {
   });
 }
 
-try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.addInitScript(() => localStorage.removeItem('portfolio-theme'));
-  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+async function waitForThemeReady(page) {
   await page.waitForFunction(() => window.__portfolioThemeDebug?.ready
     && window.__portfolioCanvasDebug?.ready
     && document.getElementById('portfolioThemeStyles')?.sheet, null, { timeout: 15000 });
+}
+
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+
+  // Establish a deterministic PAPER baseline once. Do not use addInitScript()
+  // here: init scripts run again on reload and would erase the exact persisted
+  // value this test is intended to prove survives a real navigation.
+  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+  await page.evaluate(() => localStorage.removeItem('portfolio-theme'));
+  await page.reload({ waitUntil: 'load', timeout: 30000 });
+  await waitForThemeReady(page);
 
   const paper = await inspect(page);
   if (paper.theme !== 'paper' || paper.pressed !== 'false' || paper.value !== 'FIELD') {
@@ -68,9 +77,12 @@ try {
     throw new Error(`Theme toggle moved the flight timeline: before=${beforeProgress}, after=${military.progress}`);
   }
 
+  // This reload is the persistence proof. Nothing may clear storage before the
+  // page's theme module reads it.
   await page.reload({ waitUntil: 'load', timeout: 30000 });
   await page.waitForFunction(() => window.__portfolioThemeDebug?.ready
     && document.documentElement.dataset.theme === 'military'
+    && localStorage.getItem('portfolio-theme') === 'military'
     && document.getElementById('portfolioThemeStyles')?.sheet, null, { timeout: 15000 });
   const persisted = await inspect(page);
   if (persisted.stored !== 'military' || persisted.pressed !== 'true') {
